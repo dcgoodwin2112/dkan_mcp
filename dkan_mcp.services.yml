@@ -1,0 +1,61 @@
+services:
+  dkan_mcp.server_factory:
+    class: Drupal\dkan_mcp\Server\McpServerFactory
+    arguments:
+      - '@dkan_mcp.tools.metastore'
+      - '@dkan_mcp.tools.datastore'
+      - '@dkan_mcp.tools.search'
+      - '@dkan_mcp.tools.harvest'
+      - '@dkan_mcp.tools.service'
+      - '@dkan_mcp.tools.event'
+      - '@dkan_mcp.tools.permission'
+      - '@dkan_mcp.tools.resource'
+
+  dkan_mcp.tools.metastore:
+    class: Drupal\dkan_mcp\Tools\MetastoreTools
+    arguments:
+      - '@dkan.metastore.service'
+      - '@dkan.common.dataset_info'
+
+  dkan_mcp.tools.datastore:
+    class: Drupal\dkan_mcp\Tools\DatastoreTools
+    arguments:
+      - '@dkan.datastore.service'
+      - '@dkan.datastore.query'
+
+  dkan_mcp.tools.search:
+    class: Drupal\dkan_mcp\Tools\SearchTools
+    arguments:
+      - '@http_client'
+      - '@request_stack'
+
+  dkan_mcp.tools.harvest:
+    class: Drupal\dkan_mcp\Tools\HarvestTools
+    arguments:
+      - '@dkan.harvest.service'
+
+  dkan_mcp.tools.service:
+    class: Drupal\dkan_mcp\Tools\ServiceTools
+    arguments:
+      - '@service_container'
+
+  dkan_mcp.tools.event:
+    class: Drupal\dkan_mcp\Tools\EventTools
+    arguments:
+      - '@service_container'
+      - '@event_dispatcher'
+
+  dkan_mcp.tools.resource:
+    class: Drupal\dkan_mcp\Tools\ResourceTools
+    arguments:
+      - '@dkan.metastore.service'
+      - '@dkan.metastore.resource_mapper'
+      - '@dkan.datastore.service'
+
+  dkan_mcp.tools.permission:
+    class: Drupal\dkan_mcp\Tools\PermissionTools
+    arguments:
+      - '@user.permissions'
+      - '@router.route_provider'
+      - '@entity_type.manager'
+      - '@module_handler'

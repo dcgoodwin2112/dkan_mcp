@@ -1,0 +1,9 @@
+name: DKAN MCP
+description: MCP server for DKAN.
+type: module
+core_version_requirement: ^10.2 || ^11
+package: DKAN
+dependencies:
+  - dkan:metastore
+  - dkan:datastore
+  - dkan:harvest
