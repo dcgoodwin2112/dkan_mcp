@@ -1,0 +1,7 @@
+services:
+  dkan_mcp.drush.mcp_serve:
+    class: Drupal\dkan_mcp\Drush\McpServeCommand
+    arguments:
+      - '@dkan_mcp.server_factory'
+    tags:
+      - { name: drush.command }

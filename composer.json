@@ -1,0 +1,37 @@
+{
+  "name": "dcgoodwin2112/dkan_mcp",
+  "description": "MCP server for DKAN.",
+  "type": "drupal-module",
+  "license": "GPL-2.0-or-later",
+  "require": {
+    "drupal/core": "^10.2 || ^11"
+  },
+  "suggest": {
+    "mcp/sdk": "^0.4 - Required at runtime. Install in module vendor: cd dkan_mcp && composer require mcp/sdk:^0.4 && composer run-script post-install-cleanup"
+  },
+  "scripts": {
+    "post-install-cleanup": [
+      "rm -rf vendor/opis",
+      "@composer dump-autoload"
+    ]
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9 || ^10",
+    "getdkan/mock-chain": "^1"
+  },
+  "autoload": {
+    "psr-4": {
+      "Drupal\\dkan_mcp\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Drupal\\Tests\\dkan_mcp\\": "tests/src/"
+    }
+  },
+  "config": {
+    "allow-plugins": {
+      "drupal/core-composer-scaffold": false
+    }
+  }
+}

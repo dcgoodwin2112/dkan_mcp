@@ -1,0 +1,20 @@
+<?php
+
+namespace RootedData;
+
+/**
+ * Stub for RootedData\RootedJsonData.
+ */
+class RootedJsonData {
+
+  protected string $json;
+
+  public function __construct(string $json = '{}', $schema = '{}') {
+    $this->json = $json;
+  }
+
+  public function __toString(): string {
+    return $this->json;
+  }
+
+}
