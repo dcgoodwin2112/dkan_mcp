@@ -1,6 +1,6 @@
 # DKAN MCP
 
-MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). All 23 tools are read-only.
+MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 34 tools: 29 read-only for discovery and querying, 5 write tools for cache management, module operations, and test data creation.
 
 ## Why This Module Exists
 
@@ -58,6 +58,28 @@ cd dkan_mcp && composer require mcp/sdk:^0.4 && composer run-script post-install
 ```bash
 drush en dkan_mcp
 ```
+
+## Claude Code Commands
+
+This module ships custom slash commands for Claude Code that automate common DKAN module development workflows. Each command uses the MCP tools for service discovery, event introspection, and permission validation.
+
+### Install
+
+```bash
+mkdir -p .claude/commands
+for f in dkan_mcp/claude-commands/*.md; do
+  ln -sf "../../$f" ".claude/commands/$(basename $f)"
+done
+```
+
+### Available Commands
+
+| Command | Description |
+|---|---|
+| `/scaffold-drupal-service` | Create a service class with DI, services.yml entry, and unit test |
+| `/add-event-subscriber` | Add an EventSubscriber for DKAN events with tagged service registration |
+| `/add-drupal-route` | Add a route + controller + permission |
+| `/validate-module` | Run phpcs, phpunit, permission audit, and cache rebuild |
 
 ## MCP Client Configuration
 
@@ -143,6 +165,27 @@ drush dkan-mcp:serve
 | `check_permissions` | — | Detect permission misconfigurations (orphaned, unused) |
 | `resolve_resource` | `id` | Trace distribution UUID or resource_id → perspectives → datastore table |
 
+### Write
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `clear_cache` | — | Flush all Drupal caches |
+| `enable_module` | `module_name` | Enable a Drupal module |
+| `disable_module` | `module_name` | Uninstall a Drupal module |
+| `create_test_dataset` | `title`, `download_url` | Create a minimal dataset with one CSV distribution |
+| `import_resource` | `resource_id`, `deferred?` | Trigger datastore import for a resource |
+
+### Drupal
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `list_entity_types` | `group?` | Entity types with bundles, filterable by group |
+| `get_entity_fields` | `entity_type_id`, `bundle?` | Field definitions for an entity type/bundle |
+| `list_modules` | `name_contains?` | Enabled modules with metadata |
+| `get_config` | `name?`, `prefix?` | Config values by name or list names by prefix |
+| `list_plugins` | `type` | Plugin definitions by type |
+| `get_route_info` | `route_name?`, `path?` | Route details by name or path pattern |
+
 ## Resource ID Formats
 
 Metastore tools use **dataset/distribution UUIDs** (e.g., `b230fcde-aaf0-4cf5-a6f0-788fef498927`).
@@ -152,7 +195,7 @@ Datastore tools use **resource IDs** in the format `{identifier}__{version}` (e.
 ## Architecture
 
 - **Entry point**: `McpServeCommand` (Drush command) → `McpServerFactory` → `Mcp\Server` (stdio)
-- **Tool classes**: `MetastoreTools`, `DatastoreTools`, `SearchTools`, `HarvestTools`, `ServiceTools`, `EventTools`, `PermissionTools`, `ResourceTools` — Drupal services with injected DKAN dependencies
+- **Tool classes**: `MetastoreTools`, `DatastoreTools`, `SearchTools`, `HarvestTools`, `ServiceTools`, `EventTools`, `PermissionTools`, `ResourceTools`, `WriteTools`, `DrupalTools` — Drupal services with injected DKAN dependencies
 - **opis/json-schema conflict**: DKAN requires opis v1, the MCP SDK requires v2. The SDK is installed in `dkan_mcp/vendor/` (not site-level). `SchemaValidatorShim` replaces the SDK's opis-dependent validator. The `post-install-cleanup` script removes opis packages from module vendor to prevent autoloader collisions.
 
 ## Development

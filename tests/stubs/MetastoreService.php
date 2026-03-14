@@ -29,4 +29,8 @@ class MetastoreService {
     return new \stdClass();
   }
 
+  public function post(string $schema_id, $data): string {
+    return '';
+  }
+
 }
