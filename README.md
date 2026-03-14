@@ -4,7 +4,7 @@ MCP server module for Drupal that exposes DKAN's data catalog, datastore, and in
 
 ## Why This Module Exists
 
-DKAN is a complex system. Building a custom module requires understanding its service layer, event system, permission model, resource reference chain, and datastore internals. That knowledge lives across services.yml files, source code, and runtime state — none of it visible to an AI agent by default.
+DKAN is a Drupal distribution for open data. Building a custom module means working with two complex systems: Drupal's entity types, service container, plugin system, config API, permission model, and routing — plus DKAN's own layers on top: metadata schemas, resource references, datastore import pipeline, harvest ETL, and event-driven workflows. That knowledge lives across services.yml files, source code, and runtime state — none of it visible to an AI agent by default.
 
 dkan_mcp bridges that gap. It gives your AI agent direct access to a running DKAN site so it can discover how the system works and validate code against real data, all without leaving the conversation.
 
@@ -19,6 +19,8 @@ dkan_mcp bridges that gap. It gives your AI agent direct access to a running DKA
 **Trace the resource lifecycle** — `resolve_resource` maps a resource_id through all three perspectives (source → local_file → local_url), returns the datastore table name, and reports import status. This replaces manually tracing the ResourceMapper → ResourceLocalizer → datastore import chain.
 
 **Query live data** — `query_datastore`, `get_datastore_schema`, and the metastore tools let an agent validate its code against actual datasets, table schemas, and import states on the running site.
+
+**Inspect Drupal internals** — `list_entity_types`, `get_entity_fields`, `list_plugins`, `get_config`, and `get_route_info` expose Drupal's runtime structure. An agent can discover entity types and their fields, find existing plugins, read configuration values, and understand routing without reading YAML files or guessing identifiers.
 
 ### The development loop
 
@@ -117,6 +119,12 @@ drush dkan-mcp:serve
 
 ## Tools
 
+Tools are organized by platform scope:
+
+- **DKAN tools** (Metastore, Datastore, Search, Harvest, DKAN Introspection): Require DKAN modules, operate on DKAN's data model and services.
+- **Drupal tools**: Work on any Drupal site, no DKAN dependency — entity types, fields, plugins, config, routes, modules, cache, and module management.
+- **Write tools**: Mixed — `create_test_dataset` and `import_resource` are DKAN-specific; `clear_cache`, `enable_module`, `disable_module` are Drupal-generic.
+
 ### Metastore
 
 | Tool | Parameters | Description |
@@ -152,7 +160,7 @@ drush dkan-mcp:serve
 | `get_harvest_runs` | `plan_id` | All runs with timestamps and status |
 | `get_harvest_run_result` | `plan_id`, `run_id?` | Detailed run result (latest if `run_id` omitted) |
 
-### Introspection
+### DKAN Introspection
 
 | Tool | Parameters | Description |
 |---|---|---|

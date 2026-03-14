@@ -107,15 +107,18 @@ class DatastoreToolsTest extends TestCase {
 
   public function testGetImportStatus(): void {
     $datastore = $this->createMock(DatastoreService::class);
-    $datastore->method('summary')->willReturn([
-      'numOfRows' => 100,
-      'numOfColumns' => 5,
-    ]);
+    $datastore->expects($this->once())
+      ->method('summary')
+      ->with('abc123__456')
+      ->willReturn([
+        'numOfRows' => 100,
+        'numOfColumns' => 5,
+      ]);
 
     $tools = $this->createTools(datastore: $datastore);
-    $result = $tools->getImportStatus('test-resource');
+    $result = $tools->getImportStatus('abc123__456');
 
-    $this->assertEquals('test-resource', $result['resource_id']);
+    $this->assertEquals('abc123__456', $result['resource_id']);
     $this->assertEquals(100, $result['status']['numOfRows']);
   }
 

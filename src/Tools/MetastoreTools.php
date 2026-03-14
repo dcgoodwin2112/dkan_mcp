@@ -129,7 +129,7 @@ class MetastoreTools {
       }
       return ['dataset_info' => $info];
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       return ['error' => 'Failed to gather dataset info: ' . $e->getMessage()];
     }
   }
