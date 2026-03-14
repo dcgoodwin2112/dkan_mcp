@@ -2,10 +2,12 @@
 
 namespace Drupal\dkan_mcp\Tools;
 
+use Drupal\Core\Cache\Cache;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Extension\ModuleInstallerInterface;
 use Drupal\datastore\DatastoreService;
 use Drupal\metastore\MetastoreService;
+use RootedData\RootedJsonData;
 
 /**
  * MCP tools for write operations (cache, modules, datasets, imports).
@@ -24,10 +26,12 @@ class WriteTools {
    */
   public function clearCache(): array {
     try {
-      drupal_flush_all_caches();
+      foreach (Cache::getBins() as $bin) {
+        $bin->deleteAll();
+      }
       return [
         'status' => 'success',
-        'message' => 'All caches cleared. If you changed services.yml files, restart the MCP server for the container rebuild to take effect.',
+        'message' => 'All cache bins cleared. For a full container rebuild (services.yml changes), restart the MCP server.',
       ];
     }
     catch (\Exception $e) {
@@ -100,7 +104,7 @@ class WriteTools {
         '@type' => 'dcat:Dataset',
       ];
 
-      $identifier = $this->metastoreService->post('dataset', json_encode($dataset));
+      $identifier = $this->metastoreService->post('dataset', new RootedJsonData(json_encode($dataset)));
 
       return [
         'status' => 'success',

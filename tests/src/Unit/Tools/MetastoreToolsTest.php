@@ -156,6 +156,18 @@ class MetastoreToolsTest extends TestCase {
     $this->assertEquals('abc-123', $result['dataset_info']['latest_revision']['uuid']);
   }
 
+  public function testGetDatasetInfoCatchesError(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $datasetInfo = $this->createMock(DatasetInfo::class);
+    $datasetInfo->method('gather')->willThrowException(new \TypeError('type error'));
+
+    $tools = $this->createTools($metastore, $datasetInfo);
+    $result = $tools->getDatasetInfo('abc-123');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('type error', $result['error']);
+  }
+
   public function testGetDatasetInfoNotFound(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $datasetInfo = $this->createMock(DatasetInfo::class);

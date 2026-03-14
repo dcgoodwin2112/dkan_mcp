@@ -122,16 +122,19 @@ Accepts DKAN module names: `metastore`, `datastore`, `harvest`, `common`, `metas
 
 | Need | Use MCP | Use Code Reading |
 |---|---|---|
+| **DKAN** | | |
 | Live data, actual schemas, row counts | `query_datastore`, `get_datastore_schema` | — |
 | Current permissions and role assignments | `list_permissions`, `get_permission_info` | — |
 | Service constructor params, method signatures | `get_service_info` | — |
 | Which events exist and who subscribes | `list_events`, `get_event_info` | — |
 | Import/harvest state | `get_import_status`, `get_harvest_runs` | — |
+| **Drupal** | | |
 | Entity types, bundles, field definitions | `list_entity_types`, `get_entity_fields` | — |
 | Enabled modules and metadata | `list_modules` | — |
 | Site configuration values | `get_config` | — |
 | Plugin definitions by type | `list_plugins` | — |
 | Route paths, controllers, access | `get_route_info` | — |
+| **Always use code reading** | | |
 | Method behavior and internal logic | — | Read source code |
 | Event payload/data structure | — | Read event class |
 | API request/response contracts | — | Read `docs/dkan-api.md` |

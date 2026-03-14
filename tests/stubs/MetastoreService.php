@@ -29,7 +29,7 @@ class MetastoreService {
     return new \stdClass();
   }
 
-  public function post(string $schema_id, $data): string {
+  public function post(string $schema_id, RootedJsonData $data): string {
     return '';
   }
 
