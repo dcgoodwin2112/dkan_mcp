@@ -25,11 +25,6 @@ class WriteToolsTest extends TestCase {
   }
 
   public function testClearCache(): void {
-    // Define the function stub in the Drupal\dkan_mcp\Tools namespace.
-    if (!function_exists('drupal_flush_all_caches')) {
-      eval('function drupal_flush_all_caches() {}');
-    }
-
     $tools = $this->createTools();
     $result = $tools->clearCache();
 
@@ -112,7 +107,7 @@ class WriteToolsTest extends TestCase {
     $metastore->expects($this->once())
       ->method('post')
       ->with('dataset', $this->callback(function ($data) {
-        $decoded = json_decode($data);
+        $decoded = json_decode((string) $data);
         return $decoded->title === 'Test Data'
           && $decoded->distribution[0]->downloadURL === 'https://example.com/data.csv'
           && $decoded->{'@type'} === 'dcat:Dataset';

@@ -1,6 +1,6 @@
 # Evaluation: dkan_mcp MCP Tools for DKAN Module Development
 
-Analysis of how useful the 23 MCP tools are for AI agents (like Claude Code) developing custom Drupal modules for DKAN.
+Analysis of how useful the 34 MCP tools are for AI agents (like Claude Code) developing custom Drupal modules for DKAN. Tools span two platform scopes: DKAN-specific tools (18) require DKAN modules; DKAN-scoped introspection tools (7) use Drupal APIs filtered to DKAN services/events/permissions; Drupal-generic tools (9) work on any Drupal site.
 
 ## Strengths
 
@@ -31,7 +31,10 @@ Added in the second iteration, these tools let an agent understand DKAN's runtim
 | Query & validation | `query_datastore`, `get_datastore_schema`, `get_import_status` | Strong — real table schemas, data validation |
 | Search | `search_datasets` | Moderate — useful for testing search integration |
 | Harvest | `list_harvest_plans`, `get_harvest_plan`, `get_harvest_runs`, `get_harvest_run_result` | Strong — plan configs and run history are runtime-only data |
-| Introspection | `list_services`, `get_service_info`, `list_events`, `get_event_info`, `list_permissions`, `get_permission_info`, `check_permissions`, `resolve_resource` | Strong — service APIs, events, permissions, resource chain tracing |
+| DKAN Introspection | `list_services`, `get_service_info`, `list_events`, `get_event_info`, `list_permissions`, `get_permission_info`, `check_permissions`, `resolve_resource` | Strong — service APIs, events, permissions, resource chain tracing |
+| Write (DKAN) | `create_test_dataset`, `import_resource` | Strong — test data creation and import triggering |
+| Write (Drupal) | `clear_cache`, `enable_module`, `disable_module` | Strong — cache and module management |
+| Drupal introspection | `list_entity_types`, `get_entity_fields`, `list_modules`, `get_config`, `list_plugins`, `get_route_info` | Strong — entity types, fields, plugins, config, routes without reading YAML |
 
 ## What Code Reading Already Covers
 
@@ -90,7 +93,7 @@ The `docs/` directory + source code provide some **architecture and API knowledg
 
 ## Value for AI Agents Writing DKAN Modules
 
-The 23-tool suite enables an AI agent to go from zero DKAN knowledge to a functional custom module without leaving the MCP interface. Here's the concrete workflow:
+The 34-tool suite enables an AI agent to go from zero DKAN knowledge to a functional custom module without leaving the MCP interface. Here's the concrete workflow:
 
 ### Service discovery → dependency injection
 
@@ -141,4 +144,4 @@ This loop runs entirely through MCP. The agent doesn't need to context-switch be
 
 ## Conclusion
 
-The 23-tool suite covers both **runtime data access** (what exists in the system) and **runtime architecture introspection** (how the system works). The original 15 tools were a force multiplier for iterative development. The 8 introspection tools close the remaining gaps: an agent can now discover services, events, permissions, and resource chains programmatically. Module development no longer requires reading DKAN source code for the most common tasks — the MCP interface provides sufficient architectural knowledge to build, wire up, and validate custom modules against a live DKAN installation.
+The 34-tool suite covers both **runtime data access** (what exists in the system) and **runtime architecture introspection** (how the system works). The original 15 tools were a force multiplier for iterative development. The 8 DKAN introspection tools close the remaining gaps for DKAN-specific work. The 6 Drupal-generic tools (`list_entity_types`, `get_entity_fields`, `list_modules`, `get_config`, `list_plugins`, `get_route_info`) and 3 Drupal write tools (`clear_cache`, `enable_module`, `disable_module`) extend coverage to the underlying Drupal platform — an agent can discover entity types, fields, plugins, config, and routes without reading YAML files. Module development no longer requires reading DKAN source code or guessing Drupal identifiers for the most common tasks — the MCP interface provides sufficient architectural knowledge to build, wire up, and validate custom modules against a live DKAN installation.

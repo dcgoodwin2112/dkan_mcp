@@ -73,10 +73,11 @@ dkan_mcp/
 
 **`MetastoreService::getAll(string $schemaId)`** — returns array of objects
 **`MetastoreService::get(string $schemaId, string $identifier)`** — returns `RootedJsonData`
+**`MetastoreService::post(string $schemaId, RootedJsonData $data)`** — returns identifier string
 **`Query::runQuery(DatastoreQuery $query)`** — returns object with `->results`, `->count`, `->schema`
 **`DatastoreQuery::__construct(string $json, $rows_limit = null)`** — validates JSON against `docs/query.json` schema
 **`DatastoreService::getStorage(string $id, ?string $version)`** — returns `DatabaseTableInterface`
-**`DatastoreService::summary(string $id)`** — returns status array
+**`DatastoreService::summary(string $identifier)`** — `$identifier` is full `identifier__version` resource ID; parses internally
 
 ## Service Configuration
 
