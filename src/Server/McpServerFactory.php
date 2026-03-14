@@ -10,6 +10,8 @@ use Drupal\dkan_mcp\Tools\MetastoreTools;
 use Drupal\dkan_mcp\Tools\ResourceTools;
 use Drupal\dkan_mcp\Tools\SearchTools;
 use Drupal\dkan_mcp\Tools\ServiceTools;
+use Drupal\dkan_mcp\Tools\DrupalTools;
+use Drupal\dkan_mcp\Tools\WriteTools;
 use Mcp\Schema\ToolAnnotations;
 use Mcp\Server;
 
@@ -27,6 +29,8 @@ class McpServerFactory {
     protected EventTools $eventTools,
     protected PermissionTools $permissionTools,
     protected ResourceTools $resourceTools,
+    protected WriteTools $writeTools,
+    protected DrupalTools $drupalTools,
   ) {}
 
   public function create(): Server {
@@ -41,6 +45,8 @@ class McpServerFactory {
     $this->registerEventTools($builder);
     $this->registerPermissionTools($builder);
     $this->registerResourceTools($builder);
+    $this->registerWriteTools($builder);
+    $this->registerDrupalTools($builder);
 
     return $builder->build();
   }
@@ -156,7 +162,10 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'resource_id' => ['type' => 'string', 'description' => 'Distribution UUID to query'],
+          'resource_id' => [
+            'type' => 'string',
+            'description' => 'Resource ID in identifier__version format (from list_distributions)',
+          ],
           'columns' => ['type' => 'string', 'description' => 'Comma-separated column names to return (omit for all)'],
           'conditions' => ['type' => 'string', 'description' => 'JSON array of condition objects: [{"property":"col","value":"val","operator":"="}]. Operators: =, <>, <, <=, >, >=, like, contains, starts with, in, not in, between'],
           'sort_field' => ['type' => 'string', 'description' => 'Column name to sort by'],
@@ -176,7 +185,10 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'resource_id' => ['type' => 'string', 'description' => 'Distribution UUID'],
+          'resource_id' => [
+            'type' => 'string',
+            'description' => 'Resource ID in identifier__version format (from list_distributions)',
+          ],
         ],
         'required' => ['resource_id'],
       ],
@@ -190,7 +202,10 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'resource_id' => ['type' => 'string', 'description' => 'Distribution UUID'],
+          'resource_id' => [
+            'type' => 'string',
+            'description' => 'Resource ID in identifier__version format (from list_distributions)',
+          ],
         ],
         'required' => ['resource_id'],
       ],
@@ -387,6 +402,163 @@ class McpServerFactory {
           'service_id' => ['type' => 'string', 'description' => 'Drupal service ID (e.g. dkan.metastore.service)'],
         ],
         'required' => ['service_id'],
+      ],
+    );
+  }
+
+  protected function registerWriteTools(Server\Builder $builder): void {
+    $write = new ToolAnnotations(readOnlyHint: FALSE);
+
+    $builder->addTool(
+      handler: fn() => $this->writeTools->clearCache(),
+      name: 'clear_cache',
+      description: 'Flush all Drupal caches. Use after code changes, config updates, or when cached data is stale. Does not rebuild the service container — restart the MCP server after services.yml changes.',
+      annotations: $write,
+      inputSchema: ['type' => 'object', 'properties' => new \stdClass()],
+    );
+
+    $builder->addTool(
+      handler: fn(string $module_name) => $this->writeTools->enableModule($module_name),
+      name: 'enable_module',
+      description: 'Enable a Drupal module. Installs the module and runs its install hooks. Restart the MCP server afterward if the module registers new services or routes.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'module_name' => ['type' => 'string', 'description' => 'Machine name of the module to enable'],
+        ],
+        'required' => ['module_name'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $module_name) => $this->writeTools->disableModule($module_name),
+      name: 'disable_module',
+      description: 'Uninstall a Drupal module. Runs uninstall hooks and removes module data. Restart the MCP server afterward.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'module_name' => ['type' => 'string', 'description' => 'Machine name of the module to uninstall'],
+        ],
+        'required' => ['module_name'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $title, string $download_url) => $this->writeTools->createTestDataset($title, $download_url),
+      name: 'create_test_dataset',
+      description: 'Create a minimal dataset with one CSV distribution. Returns the dataset UUID. Follow up with list_distributions to get the resource_id, then import_resource to trigger datastore import.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'title' => ['type' => 'string', 'description' => 'Dataset title'],
+          'download_url' => ['type' => 'string', 'description' => 'URL to a CSV file for the distribution'],
+        ],
+        'required' => ['title', 'download_url'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $resource_id, bool $deferred = FALSE) => $this->writeTools->importResource($resource_id, $deferred),
+      name: 'import_resource',
+      description: 'Trigger datastore import for a resource. Runs synchronously by default (suitable for small CSVs). Set deferred=true to queue for background processing.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'resource_id' => ['type' => 'string', 'description' => 'Resource ID in identifier__version format (from list_distributions)'],
+          'deferred' => ['type' => 'boolean', 'description' => 'Queue for background processing instead of running inline', 'default' => FALSE],
+        ],
+        'required' => ['resource_id'],
+      ],
+    );
+  }
+
+  protected function registerDrupalTools(Server\Builder $builder): void {
+    $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
+
+    $builder->addTool(
+      handler: fn(?string $group = NULL) => $this->drupalTools->listEntityTypes($group),
+      name: 'list_entity_types',
+      description: 'List Drupal entity types with bundles. Filter by group: "content" or "configuration".',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'group' => ['type' => 'string', 'description' => 'Filter by group: "content" or "configuration"', 'enum' => ['content', 'configuration']],
+        ],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $entity_type_id, ?string $bundle = NULL) => $this->drupalTools->getEntityFields($entity_type_id, $bundle),
+      name: 'get_entity_fields',
+      description: 'Get field definitions for an entity type. Provide bundle for all fields; omit for base fields only (auto-resolves for non-bundleable entities like user).',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'entity_type_id' => ['type' => 'string', 'description' => 'Entity type ID (e.g. node, user, taxonomy_term)'],
+          'bundle' => ['type' => 'string', 'description' => 'Bundle name (e.g. article, page). Omit for base fields only.'],
+        ],
+        'required' => ['entity_type_id'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(?string $name_contains = NULL) => $this->drupalTools->listModules($name_contains),
+      name: 'list_modules',
+      description: 'List enabled Drupal modules with metadata. Optionally filter by substring match on machine name.',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'name_contains' => ['type' => 'string', 'description' => 'Filter modules whose machine name contains this substring'],
+        ],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(?string $name = NULL, ?string $prefix = NULL) => $this->drupalTools->getConfig($name, $prefix),
+      name: 'get_config',
+      description: 'Get Drupal configuration. Provide "name" for full config values (e.g. system.site), or "prefix" to list matching config names (e.g. system.).',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'name' => ['type' => 'string', 'description' => 'Full config name (e.g. system.site)'],
+          'prefix' => ['type' => 'string', 'description' => 'Config name prefix to list (e.g. system.)'],
+        ],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $type) => $this->drupalTools->listPlugins($type),
+      name: 'list_plugins',
+      description: 'List plugin definitions for a plugin type. Common types: block, field.field_type, field.widget, field.formatter, queue_worker, action, condition, element_info.',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'type' => ['type' => 'string', 'description' => 'Plugin type (e.g. block, field.field_type, queue_worker)'],
+        ],
+        'required' => ['type'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(?string $route_name = NULL, ?string $path = NULL) => $this->drupalTools->getRouteInfo($route_name, $path),
+      name: 'get_route_info',
+      description: 'Get route information. Provide "route_name" for exact lookup or "path" to search by path pattern. Returns path, controller, methods, and access requirements.',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'route_name' => ['type' => 'string', 'description' => 'Exact route name (e.g. dkan.metastore.get)'],
+          'path' => ['type' => 'string', 'description' => 'Path pattern to search (e.g. /api/1/)'],
+        ],
       ],
     );
   }

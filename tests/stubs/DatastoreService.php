@@ -17,4 +17,8 @@ class DatastoreService {
     return [];
   }
 
+  public function import(string $identifier, bool $deferred = FALSE, $version = NULL) {
+    return [];
+  }
+
 }
