@@ -116,8 +116,7 @@ class DatastoreTools {
    */
   public function getImportStatus(string $resourceId): array {
     try {
-      [$identifier, $version] = $this->parseResourceId($resourceId);
-      $summary = $this->datastoreService->summary($identifier);
+      $summary = $this->datastoreService->summary($resourceId);
       return ['resource_id' => $resourceId, 'status' => $summary];
     }
     catch (\Exception $e) {
