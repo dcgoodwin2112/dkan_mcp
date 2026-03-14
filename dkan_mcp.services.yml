@@ -10,6 +10,8 @@ services:
       - '@dkan_mcp.tools.event'
       - '@dkan_mcp.tools.permission'
       - '@dkan_mcp.tools.resource'
+      - '@dkan_mcp.tools.write'
+      - '@dkan_mcp.tools.drupal'
 
   dkan_mcp.tools.metastore:
     class: Drupal\dkan_mcp\Tools\MetastoreTools
@@ -59,3 +61,22 @@ services:
       - '@router.route_provider'
       - '@entity_type.manager'
       - '@module_handler'
+
+  dkan_mcp.tools.drupal:
+    class: Drupal\dkan_mcp\Tools\DrupalTools
+    arguments:
+      - '@entity_type.manager'
+      - '@entity_field.manager'
+      - '@entity_type.bundle.info'
+      - '@module_handler'
+      - '@config.factory'
+      - '@router.route_provider'
+      - '@service_container'
+
+  dkan_mcp.tools.write:
+    class: Drupal\dkan_mcp\Tools\WriteTools
+    arguments:
+      - '@module_installer'
+      - '@module_handler'
+      - '@dkan.metastore.service'
+      - '@dkan.datastore.service'
