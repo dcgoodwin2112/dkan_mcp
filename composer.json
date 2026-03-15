@@ -1,7 +1,7 @@
 {
   "name": "dcgoodwin2112/dkan_mcp",
   "description": "MCP server for DKAN.",
-  "type": "drupal-module",
+  "type": "drupal-custom-module",
   "license": "GPL-2.0-or-later",
   "require": {
     "drupal/core": "^10.2 || ^11"
