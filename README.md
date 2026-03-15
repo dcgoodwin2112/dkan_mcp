@@ -52,7 +52,7 @@ See [docs/mcp-tools-evaluation.md](docs/mcp-tools-evaluation.md) for a detailed 
 2. Install the MCP SDK in the module's own vendor directory (required due to an `opis/json-schema` version conflict with DKAN):
 
 ```bash
-cd dkan_mcp && composer require mcp/sdk:^0.4 && composer run-script post-install-cleanup
+cd web/modules/custom/dkan_mcp && composer require mcp/sdk:^0.4 && composer run-script post-install-cleanup
 ```
 
 3. Enable the module:
@@ -69,7 +69,7 @@ This module ships custom slash commands for Claude Code that automate common DKA
 
 ```bash
 mkdir -p .claude/commands
-for f in dkan_mcp/claude-commands/*.md; do
+for f in web/modules/custom/dkan_mcp/claude-commands/*.md; do
   ln -sf "../../$f" ".claude/commands/$(basename $f)"
 done
 ```
