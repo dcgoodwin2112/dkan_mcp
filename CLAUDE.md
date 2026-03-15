@@ -166,4 +166,4 @@ The MCP SDK requires `opis/json-schema ^2` but DKAN requires `^1`. The SDK lives
 
 ## Slash Commands
 
-Four Claude Code commands ship in `claude-commands/`: `/scaffold-drupal-service`, `/add-event-subscriber`, `/add-drupal-route`, `/validate-module`. These use MCP tools internally for service discovery, event introspection, and permission validation. See README.md for installation (symlink into `.claude/commands/`).
+Four Claude Code commands ship in `claude-commands/`: `/scaffold-drupal-service`, `/add-event-subscriber`, `/add-drupal-route`, `/validate-module`. These use MCP tools internally for service discovery, event introspection, and permission validation. See README.md for installation (symlink from project root `.claude/commands/` to `web/modules/custom/dkan_mcp/claude-commands/`).
