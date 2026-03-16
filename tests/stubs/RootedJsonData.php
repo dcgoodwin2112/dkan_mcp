@@ -17,4 +17,10 @@ class RootedJsonData {
     return $this->json;
   }
 
+  public function set(string $path, $value): void {
+    if ($path === '$') {
+      $this->json = json_encode($value);
+    }
+  }
+
 }

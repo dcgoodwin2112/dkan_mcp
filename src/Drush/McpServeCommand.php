@@ -33,7 +33,50 @@ class McpServeCommand extends DrushCommands {
     // script in composer.json) to avoid conflicting with DKAN's opis v1.
     $moduleVendor = dirname(__DIR__, 2) . '/vendor/autoload.php';
     if (file_exists($moduleVendor)) {
-      require_once $moduleVendor;
+      $loader = require_once $moduleVendor;
+      // The module's vendor includes packages (Symfony, Doctrine, etc.) at
+      // different major versions than the host site. Only keep namespaces
+      // the MCP SDK needs that the host site doesn't provide; strip
+      // everything else so the host site's autoloader wins.
+      if ($loader instanceof \Composer\Autoload\ClassLoader) {
+        $keepPrefixes = [
+          'Mcp\\',
+          'Psr\\Clock\\',
+          'Psr\\SimpleCache\\',
+          'Revolt\\',
+          'Symfony\\Component\\Uid\\',
+          'Symfony\\Polyfill\\Uuid\\',
+          'phpDocumentor\\Reflection\\',
+          'Http\\Discovery\\',
+          'Webmozart\\Assert\\',
+        ];
+        foreach (array_keys($loader->getPrefixesPsr4()) as $prefix) {
+          $keep = FALSE;
+          foreach ($keepPrefixes as $allowed) {
+            if (str_starts_with($prefix, $allowed)) {
+              $keep = TRUE;
+              break;
+            }
+          }
+          if (!$keep) {
+            $loader->setPsr4($prefix, []);
+          }
+        }
+        $classMap = $loader->getClassMap();
+        foreach ($classMap as $class => $path) {
+          $keep = FALSE;
+          foreach ($keepPrefixes as $allowed) {
+            if (str_starts_with($class, $allowed)) {
+              $keep = TRUE;
+              break;
+            }
+          }
+          if (!$keep) {
+            unset($classMap[$class]);
+          }
+        }
+        $loader->addClassMap($classMap);
+      }
     }
 
     // Suppress any Drupal/Drush output that could corrupt the JSON-RPC stream.

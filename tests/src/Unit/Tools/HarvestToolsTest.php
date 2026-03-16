@@ -19,7 +19,7 @@ class HarvestToolsTest extends TestCase {
     $tools = $this->createTools($harvest);
     $result = $tools->listHarvestPlans();
 
-    $this->assertEquals(['plan_a', 'plan_b'], $result['plan_ids']);
+    $this->assertEquals(['plan_a', 'plan_b'], $result['plans']);
     $this->assertEquals(2, $result['total']);
   }
 
@@ -30,7 +30,7 @@ class HarvestToolsTest extends TestCase {
     $tools = $this->createTools($harvest);
     $result = $tools->listHarvestPlans();
 
-    $this->assertEmpty($result['plan_ids']);
+    $this->assertEmpty($result['plans']);
     $this->assertEquals(0, $result['total']);
   }
 
@@ -64,9 +64,12 @@ class HarvestToolsTest extends TestCase {
     $runJson = json_encode([
       'status' => ['extract' => 'SUCCESS'],
       'identifier' => '1700000000',
+      'plan' => json_encode(['identifier' => 'plan_a', 'extract' => ['type' => 'index']]),
     ]);
     $harvest = $this->createMock(HarvestService::class);
-    $harvest->method('getAllHarvestRunInfo')->willReturn([$runJson]);
+    $harvest->method('getHarvestPlanObject')->willReturn((object) ['identifier' => 'plan_a']);
+    // Use object keys to simulate real DKAN response.
+    $harvest->method('getAllHarvestRunInfo')->willReturn([42 => $runJson]);
 
     $tools = $this->createTools($harvest);
     $result = $tools->getHarvestRuns('plan_a');
@@ -74,11 +77,16 @@ class HarvestToolsTest extends TestCase {
     $this->assertCount(1, $result['runs']);
     $this->assertEquals(1, $result['total']);
     $this->assertEquals('1700000000', $result['runs'][0]['identifier']);
+    // Plan config should be stripped to reduce token waste.
+    $this->assertArrayNotHasKey('plan', $result['runs'][0]);
+    // Runs should be numerically indexed (array_values).
+    $this->assertArrayHasKey(0, $result['runs']);
   }
 
   public function testGetHarvestRunResult(): void {
     $runResult = [
       'status' => ['extract' => 'SUCCESS', 'load' => ['dataset-1' => 'NEW']],
+      'plan' => json_encode(['identifier' => 'plan_a', 'extract' => ['type' => 'index']]),
     ];
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getHarvestRunResult')->willReturn($runResult);
@@ -88,6 +96,8 @@ class HarvestToolsTest extends TestCase {
 
     $this->assertArrayHasKey('result', $result);
     $this->assertEquals('SUCCESS', $result['result']['status']['extract']);
+    // Plan config should be stripped to reduce token waste.
+    $this->assertArrayNotHasKey('plan', $result['result']);
   }
 
   public function testGetHarvestRunResultNotFound(): void {
@@ -98,6 +108,29 @@ class HarvestToolsTest extends TestCase {
     $result = $tools->getHarvestRunResult('nonexistent');
 
     $this->assertArrayHasKey('error', $result);
+  }
+
+  public function testGetHarvestRunResultNotFoundWithRunId(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->method('getHarvestRunResult')->willReturn([]);
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->getHarvestRunResult('sample_content', 'nonexistent_run');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('sample_content', $result['error']);
+    $this->assertStringContainsString('nonexistent_run', $result['error']);
+  }
+
+  public function testGetHarvestRunsErrorsOnInvalidPlan(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->method('getHarvestPlanObject')->willReturn(NULL);
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->getHarvestRuns('nonexistent');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Harvest plan not found', $result['error']);
   }
 
 }

@@ -3,6 +3,7 @@
 namespace Drupal\Tests\dkan_mcp\Unit\Tools;
 
 use Drupal\common\DataResource;
+use Drupal\common\Storage\DatabaseTableInterface;
 use Drupal\datastore\DatastoreService;
 use Drupal\dkan_mcp\Tools\ResourceTools;
 use Drupal\metastore\MetastoreService;
@@ -38,16 +39,18 @@ class ResourceToolsTest extends TestCase {
   protected function createDistributionJson(string $identifier, string $version): string {
     return json_encode([
       'identifier' => 'dist-uuid-123',
-      'downloadURL' => $identifier . '__' . $version,
-      '%Ref:downloadURL' => [
-        [
-          'identifier' => 'ref-id',
-          'data' => [
-            'identifier' => $identifier,
-            'version' => $version,
-            'filePath' => 'https://example.com/data.csv',
-            'perspective' => 'source',
-            'mimeType' => 'text/csv',
+      'data' => [
+        'downloadURL' => $identifier . '__' . $version,
+        '%Ref:downloadURL' => [
+          [
+            'identifier' => 'ref-id',
+            'data' => [
+              'identifier' => $identifier,
+              'version' => $version,
+              'filePath' => 'https://example.com/data.csv',
+              'perspective' => 'source',
+              'mimeType' => 'text/csv',
+            ],
           ],
         ],
       ],
@@ -66,7 +69,13 @@ class ResourceToolsTest extends TestCase {
       ['abc123', 'local_url', '111', NULL],
     ]);
 
-    $datastoreService->method('summary')->willReturn(['numOfRows' => 100]);
+    // Mock storage for table name.
+    $storage = $this->createMock(DatabaseTableInterface::class);
+    $storage->method('getTableName')->willReturn('datastore_abc123_table');
+    $datastoreService->method('getStorage')->with('abc123', '111')->willReturn($storage);
+
+    // summary() should receive the full resource ID.
+    $datastoreService->method('summary')->with('abc123__111')->willReturn(['numOfRows' => 100]);
 
     $tools = $this->createTools($metastore, $resourceMapper, $datastoreService);
     $result = $tools->resolveResource('abc123__111');
@@ -79,6 +88,8 @@ class ResourceToolsTest extends TestCase {
     $this->assertEquals('source', $result['perspectives'][0]['perspective']);
     $this->assertEquals('https://example.com/data.csv', $result['perspectives'][0]['file_path']);
     $this->assertEquals('local_file', $result['perspectives'][1]['perspective']);
+    $this->assertEquals('datastore_abc123_table', $result['datastore_table']);
+    $this->assertEquals('done', $result['import_status']);
   }
 
   public function testResolveFromDistributionUuid(): void {
@@ -90,6 +101,7 @@ class ResourceToolsTest extends TestCase {
       ->willReturn(new RootedJsonData($json));
 
     $resourceMapper->method('get')->willReturn(NULL);
+    $datastoreService->method('getStorage')->willThrowException(new \RuntimeException('No storage'));
     $datastoreService->method('summary')->willThrowException(new \RuntimeException('Not found'));
 
     $tools = $this->createTools($metastore, $resourceMapper, $datastoreService);
@@ -105,6 +117,7 @@ class ResourceToolsTest extends TestCase {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
     $resourceMapper->method('get')->willReturn(NULL);
+    $datastoreService->method('getStorage')->willThrowException(new \RuntimeException('No storage'));
     $datastoreService->method('summary')->willThrowException(new \RuntimeException('Not found'));
 
     $tools = $this->createTools($metastore, $resourceMapper, $datastoreService);
@@ -129,19 +142,53 @@ class ResourceToolsTest extends TestCase {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
     $resourceMapper->method('get')->willReturn(NULL);
+
+    $storage = $this->createMock(DatabaseTableInterface::class);
+    $storage->method('getTableName')->willReturn('datastore_real_table');
+    $datastoreService->method('getStorage')->willReturn($storage);
     $datastoreService->method('summary')->willThrowException(new \RuntimeException('Not found'));
 
     $tools = $this->createTools($metastore, $resourceMapper, $datastoreService);
     $result = $tools->resolveResource('abc123__111');
 
-    $expectedTable = 'datastore_' . md5('abc123__111__source');
-    $this->assertEquals($expectedTable, $result['datastore_table']);
+    $this->assertEquals('datastore_real_table', $result['datastore_table']);
+  }
+
+  public function testResolveDatastoreTableNullWhenStorageUnavailable(): void {
+    [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
+
+    $resourceMapper->method('get')->willReturn(NULL);
+    $datastoreService->method('getStorage')->willThrowException(new \RuntimeException('No storage'));
+    $datastoreService->method('summary')->willThrowException(new \RuntimeException('Not found'));
+
+    $tools = $this->createTools($metastore, $resourceMapper, $datastoreService);
+    $result = $tools->resolveResource('abc123__111');
+
+    $this->assertNull($result['datastore_table']);
+  }
+
+  public function testResolveImportStatusWithObjectSummary(): void {
+    [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
+
+    $resourceMapper->method('get')->willReturn(NULL);
+    $datastoreService->method('getStorage')->willThrowException(new \RuntimeException('No storage'));
+
+    // Real DKAN returns a TableSummary object, not an array.
+    $summary = new \stdClass();
+    $summary->numOfRows = 50;
+    $datastoreService->method('summary')->willReturn($summary);
+
+    $tools = $this->createTools($metastore, $resourceMapper, $datastoreService);
+    $result = $tools->resolveResource('abc123__111');
+
+    $this->assertEquals('done', $result['import_status']);
   }
 
   public function testResolveImportNotStarted(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
     $resourceMapper->method('get')->willReturn(NULL);
+    $datastoreService->method('getStorage')->willThrowException(new \RuntimeException('No storage'));
     $datastoreService->method('summary')->willThrowException(new \RuntimeException('No import'));
 
     $tools = $this->createTools($metastore, $resourceMapper, $datastoreService);
@@ -153,7 +200,7 @@ class ResourceToolsTest extends TestCase {
   public function testResolveDistributionNoRefDownloadUrl(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
-    $json = json_encode(['identifier' => 'dist-uuid', 'downloadURL' => 'https://example.com/data.csv']);
+    $json = json_encode(['identifier' => 'dist-uuid', 'data' => ['downloadURL' => 'https://example.com/data.csv']]);
     $metastore->method('get')->willReturn(new RootedJsonData($json));
 
     $tools = $this->createTools($metastore, $resourceMapper, $datastoreService);
