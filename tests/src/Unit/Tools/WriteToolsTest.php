@@ -108,11 +108,15 @@ class WriteToolsTest extends TestCase {
       ->method('post')
       ->with('dataset', $this->callback(function ($data) {
         $decoded = json_decode((string) $data);
-        return $decoded->title === 'Test Data'
+        return !empty($decoded->identifier)
+          && $decoded->title === 'Test Data'
           && $decoded->distribution[0]->downloadURL === 'https://example.com/data.csv'
           && $decoded->{'@type'} === 'dcat:Dataset';
       }))
       ->willReturn('test-uuid-1234');
+    $metastore->expects($this->once())
+      ->method('publish')
+      ->with('dataset', 'test-uuid-1234');
 
     $tools = $this->createTools(metastore: $metastore);
     $result = $tools->createTestDataset('Test Data', 'https://example.com/data.csv');
@@ -158,6 +162,34 @@ class WriteToolsTest extends TestCase {
 
     $this->assertEquals('success', $result['status']);
     $this->assertStringContainsString('queued', $result['message']);
+  }
+
+  public function testImportResourceWithErrors(): void {
+    $errorResult = new class {
+
+      public function getStatus(): string {
+        return 'error';
+      }
+
+      public function getError(): string {
+        return 'File not found';
+      }
+
+    };
+
+    $datastore = $this->createMock(DatastoreService::class);
+    $datastore->expects($this->once())
+      ->method('import')
+      ->with('abc123', FALSE, '456')
+      ->willReturn(['ImportService' => $errorResult]);
+
+    $tools = $this->createTools(datastore: $datastore);
+    $result = $tools->importResource('abc123__456');
+
+    $this->assertEquals('error', $result['status']);
+    $this->assertNotEmpty($result['errors']);
+    $this->assertStringContainsString('File not found', $result['errors'][0]);
+    $this->assertEquals('Import completed with errors.', $result['message']);
   }
 
   public function testImportResourceError(): void {

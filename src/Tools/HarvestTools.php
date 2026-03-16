@@ -18,7 +18,7 @@ class HarvestTools {
    */
   public function listHarvestPlans(): array {
     $ids = $this->harvest->getAllHarvestIds();
-    return ['plan_ids' => $ids, 'total' => count($ids)];
+    return ['plans' => $ids, 'total' => count($ids)];
   }
 
   /**
@@ -36,8 +36,17 @@ class HarvestTools {
    * List all runs for a harvest plan.
    */
   public function getHarvestRuns(string $planId): array {
+    $plan = $this->harvest->getHarvestPlanObject($planId);
+    if ($plan === NULL) {
+      return ['error' => 'Harvest plan not found: ' . $planId];
+    }
     $runs = $this->harvest->getAllHarvestRunInfo($planId);
-    $decoded = array_map(fn($run) => is_string($run) ? json_decode($run, TRUE) : $run, $runs);
+    $decoded = [];
+    foreach ($runs as $run) {
+      $item = is_string($run) ? json_decode($run, TRUE) : $run;
+      unset($item['plan']);
+      $decoded[] = $item;
+    }
     return ['runs' => $decoded, 'total' => count($decoded)];
   }
 
@@ -47,8 +56,13 @@ class HarvestTools {
   public function getHarvestRunResult(string $planId, ?string $runId = NULL): array {
     $result = $this->harvest->getHarvestRunResult($planId, $runId);
     if (empty($result)) {
-      return ['error' => 'No run result found for plan: ' . $planId];
+      $msg = 'No run result found for plan: ' . $planId;
+      if ($runId !== NULL) {
+        $msg .= ', run: ' . $runId;
+      }
+      return ['error' => $msg];
     }
+    unset($result['plan']);
     return ['result' => $result];
   }
 

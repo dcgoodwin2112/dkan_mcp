@@ -69,6 +69,7 @@ services:
       - '@entity_field.manager'
       - '@entity_type.bundle.info'
       - '@module_handler'
+      - '@extension.list.module'
       - '@config.factory'
       - '@router.route_provider'
       - '@service_container'

@@ -111,7 +111,7 @@ Accepts DKAN module names: `metastore`, `datastore`, `harvest`, `common`, `metas
 | Mistake | Correct Approach |
 |---|---|
 | Passing distribution UUID to `query_datastore` | Use `resource_id` from `list_distributions` (`identifier__version` format) |
-| Passing distribution UUID to `resolve_resource` | Use `resource_id` format instead — distribution UUID resolution fails due to DKAN not including `%Ref:downloadURL` in distribution API responses |
+| Passing distribution UUID to `resolve_resource` | Works correctly; `list_distributions` is still the preferred bridge for getting `resource_id` from a dataset |
 | Assuming `get_event_info` returns event payload shape | Read the event class source for data structure; `get_event_info` only returns subscribers |
 | Using `get_service_info` output without checking `accessCheck()` | If a method signature shows entity queries, the code may need `->accessCheck(TRUE/FALSE)` — `get_service_info` doesn't surface this |
 | Querying a resource before import completes | Call `get_import_status` first; status must be `done` |

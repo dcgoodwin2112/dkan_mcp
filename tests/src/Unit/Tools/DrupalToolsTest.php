@@ -10,6 +10,7 @@ use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\Extension;
+use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Field\FieldDefinitionInterface;
@@ -27,6 +28,7 @@ class DrupalToolsTest extends TestCase {
     ?EntityFieldManagerInterface $entityFieldManager = NULL,
     ?EntityTypeBundleInfoInterface $bundleInfo = NULL,
     ?ModuleHandlerInterface $moduleHandler = NULL,
+    ?ModuleExtensionList $moduleExtensionList = NULL,
     ?ConfigFactoryInterface $configFactory = NULL,
     ?RouteProviderInterface $routeProvider = NULL,
     ?ContainerInterface $container = NULL,
@@ -36,6 +38,7 @@ class DrupalToolsTest extends TestCase {
       $entityFieldManager ?? $this->createMock(EntityFieldManagerInterface::class),
       $bundleInfo ?? $this->createMock(EntityTypeBundleInfoInterface::class),
       $moduleHandler ?? $this->createMock(ModuleHandlerInterface::class),
+      $moduleExtensionList ?? $this->createMock(ModuleExtensionList::class),
       $configFactory ?? $this->createMock(ConfigFactoryInterface::class),
       $routeProvider ?? $this->createMock(RouteProviderInterface::class),
       $container ?? $this->createMock(ContainerInterface::class),
@@ -79,7 +82,7 @@ class DrupalToolsTest extends TestCase {
     $bundleInfo = $this->createMock(EntityTypeBundleInfoInterface::class);
 
     $nodeType = $this->createEntityType('node', 'Content', 'Drupal\node\Entity\Node', 'content', ['id' => 'nid', 'bundle' => 'type', 'label' => 'title', 'uuid' => 'uuid'], 'Drupal\node\NodeStorage', 'node_type');
-    $userType = $this->createEntityType('user', 'User', 'Drupal\user\Entity\User', 'content', ['id' => 'uid', 'label' => 'name', 'uuid' => 'uuid'], 'Drupal\user\UserStorage');
+    $userType = $this->createEntityType('user', 'User', 'Drupal\user\Entity\User', 'content', ['id' => 'uid', 'label' => 'name', 'uuid' => 'uuid', 'revision' => ''], 'Drupal\user\UserStorage');
 
     $entityTypeManager->method('getDefinitions')->willReturn([
       'node' => $nodeType,
@@ -99,6 +102,9 @@ class DrupalToolsTest extends TestCase {
     $this->assertEquals('Content', $result['entity_types'][0]['label']);
     $this->assertCount(2, $result['entity_types'][0]['bundles']);
     $this->assertEquals('article', $result['entity_types'][0]['bundles'][0]['id']);
+    // Empty-string entity keys should be filtered out.
+    $this->assertArrayNotHasKey('revision', $result['entity_types'][1]['entity_keys']);
+    $this->assertArrayHasKey('id', $result['entity_types'][1]['entity_keys']);
   }
 
   public function testListEntityTypesFiltersByGroup(): void {
@@ -137,10 +143,16 @@ class DrupalToolsTest extends TestCase {
   public function testGetEntityFieldsReturnsFieldsForBundle(): void {
     $entityTypeManager = $this->createMock(EntityTypeManagerInterface::class);
     $entityFieldManager = $this->createMock(EntityFieldManagerInterface::class);
+    $bundleInfo = $this->createMock(EntityTypeBundleInfoInterface::class);
 
     $entityTypeManager->method('hasDefinition')->with('node')->willReturn(TRUE);
     $nodeDef = $this->createEntityType('node', 'Content', 'Drupal\node\Entity\Node', 'content', [], 'Drupal\node\NodeStorage', 'node_type');
     $entityTypeManager->method('getDefinition')->with('node')->willReturn($nodeDef);
+
+    $bundleInfo->method('getBundleInfo')->with('node')->willReturn([
+      'article' => ['label' => 'Article'],
+      'page' => ['label' => 'Basic page'],
+    ]);
 
     $titleField = $this->createFieldDefinition('title', 'string', 'Title', TRUE, 1, '', TRUE);
     $bodyField = $this->createFieldDefinition('body', 'text_with_summary', 'Body', FALSE, 1, 'Main body text', FALSE);
@@ -150,7 +162,7 @@ class DrupalToolsTest extends TestCase {
       'body' => $bodyField,
     ]);
 
-    $tools = $this->createTools(entityTypeManager: $entityTypeManager, entityFieldManager: $entityFieldManager);
+    $tools = $this->createTools(entityTypeManager: $entityTypeManager, entityFieldManager: $entityFieldManager, bundleInfo: $bundleInfo);
     $result = $tools->getEntityFields('node', 'article');
 
     $this->assertEquals(2, $result['total']);
@@ -165,17 +177,22 @@ class DrupalToolsTest extends TestCase {
   public function testGetEntityFieldsAutoResolvesNonBundleable(): void {
     $entityTypeManager = $this->createMock(EntityTypeManagerInterface::class);
     $entityFieldManager = $this->createMock(EntityFieldManagerInterface::class);
+    $bundleInfo = $this->createMock(EntityTypeBundleInfoInterface::class);
 
     $entityTypeManager->method('hasDefinition')->with('user')->willReturn(TRUE);
     $userDef = $this->createEntityType('user', 'User', 'Drupal\user\Entity\User', 'content', [], 'Drupal\user\UserStorage');
     $entityTypeManager->method('getDefinition')->with('user')->willReturn($userDef);
+
+    $bundleInfo->method('getBundleInfo')->with('user')->willReturn([
+      'user' => ['label' => 'User'],
+    ]);
 
     $nameField = $this->createFieldDefinition('name', 'string', 'Name', TRUE, 1, '', TRUE);
     $entityFieldManager->method('getFieldDefinitions')->with('user', 'user')->willReturn([
       'name' => $nameField,
     ]);
 
-    $tools = $this->createTools(entityTypeManager: $entityTypeManager, entityFieldManager: $entityFieldManager);
+    $tools = $this->createTools(entityTypeManager: $entityTypeManager, entityFieldManager: $entityFieldManager, bundleInfo: $bundleInfo);
     $result = $tools->getEntityFields('user');
 
     $this->assertEquals(1, $result['total']);
@@ -202,6 +219,28 @@ class DrupalToolsTest extends TestCase {
     $this->assertEquals('nid', $result['fields'][0]['name']);
   }
 
+  public function testGetEntityFieldsErrorsOnInvalidBundle(): void {
+    $entityTypeManager = $this->createMock(EntityTypeManagerInterface::class);
+    $bundleInfo = $this->createMock(EntityTypeBundleInfoInterface::class);
+
+    $entityTypeManager->method('hasDefinition')->with('node')->willReturn(TRUE);
+    $nodeDef = $this->createEntityType('node', 'Content', 'Drupal\node\Entity\Node', 'content', [], 'Drupal\node\NodeStorage', 'node_type');
+    $entityTypeManager->method('getDefinition')->with('node')->willReturn($nodeDef);
+
+    $bundleInfo->method('getBundleInfo')->with('node')->willReturn([
+      'article' => ['label' => 'Article'],
+      'page' => ['label' => 'Basic page'],
+    ]);
+
+    $tools = $this->createTools(entityTypeManager: $entityTypeManager, bundleInfo: $bundleInfo);
+    $result = $tools->getEntityFields('node', 'nonexistent');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Bundle not found', $result['error']);
+    $this->assertStringContainsString('article', $result['error']);
+    $this->assertStringContainsString('page', $result['error']);
+  }
+
   public function testGetEntityFieldsErrorsOnInvalidType(): void {
     $entityTypeManager = $this->createMock(EntityTypeManagerInterface::class);
     $entityTypeManager->method('hasDefinition')->with('nonexistent')->willReturn(FALSE);
@@ -217,19 +256,22 @@ class DrupalToolsTest extends TestCase {
 
   public function testListModulesReturnsMetadata(): void {
     $moduleHandler = $this->createMock(ModuleHandlerInterface::class);
+    $moduleExtensionList = $this->createMock(ModuleExtensionList::class);
 
     $ext = $this->createMock(Extension::class);
     $ext->method('getPath')->willReturn('web/modules/contrib/dkan');
-    $ext->info = [
-      'name' => 'DKAN',
-      'version' => '2.22',
-      'package' => 'DKAN',
-      'dependencies' => ['drupal:node'],
-    ];
 
     $moduleHandler->method('getModuleList')->willReturn(['dkan' => $ext]);
+    $moduleExtensionList->method('getAllInstalledInfo')->willReturn([
+      'dkan' => [
+        'name' => 'DKAN',
+        'version' => '2.22',
+        'package' => 'DKAN',
+        'dependencies' => ['drupal:node'],
+      ],
+    ]);
 
-    $tools = $this->createTools(moduleHandler: $moduleHandler);
+    $tools = $this->createTools(moduleHandler: $moduleHandler, moduleExtensionList: $moduleExtensionList);
     $result = $tools->listModules();
 
     $this->assertEquals(1, $result['total']);
@@ -278,7 +320,11 @@ class DrupalToolsTest extends TestCase {
   public function testGetConfigReturnsByName(): void {
     $configFactory = $this->createMock(ConfigFactoryInterface::class);
     $config = $this->createMock(ImmutableConfig::class);
-    $config->method('getRawData')->willReturn(['name' => 'My Site', 'slogan' => 'A test site']);
+    $config->method('getRawData')->willReturn([
+      'name' => 'My Site',
+      'slogan' => 'A test site',
+      '_core' => ['default_config_hash' => 'abc123'],
+    ]);
     $configFactory->method('get')->with('system.site')->willReturn($config);
 
     $tools = $this->createTools(configFactory: $configFactory);
@@ -287,6 +333,7 @@ class DrupalToolsTest extends TestCase {
     $this->assertEquals('system.site', $result['config_name']);
     $this->assertEquals('My Site', $result['data']['name']);
     $this->assertEquals('A test site', $result['data']['slogan']);
+    $this->assertArrayNotHasKey('_core', $result['data']);
   }
 
   public function testGetConfigListsByPrefix(): void {

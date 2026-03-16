@@ -7,6 +7,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Routing\RouteProviderInterface;
@@ -21,6 +22,7 @@ class DrupalTools {
     protected EntityFieldManagerInterface $entityFieldManager,
     protected EntityTypeBundleInfoInterface $bundleInfo,
     protected ModuleHandlerInterface $moduleHandler,
+    protected ModuleExtensionList $moduleExtensionList,
     protected ConfigFactoryInterface $configFactory,
     protected RouteProviderInterface $routeProvider,
     protected ContainerInterface $container,
@@ -54,7 +56,7 @@ class DrupalTools {
           'label' => (string) $definition->getLabel(),
           'class' => $definition->getOriginalClass(),
           'group' => $entityGroup,
-          'entity_keys' => $definition->getKeys(),
+          'entity_keys' => array_filter($definition->getKeys(), fn($v) => $v !== ''),
           'storage_class' => $definition->getStorageClass(),
           'bundles' => $bundles,
         ];
@@ -81,6 +83,14 @@ class DrupalTools {
         $definition = $this->entityTypeManager->getDefinition($entityTypeId);
         if ($definition->getBundleEntityType() === NULL) {
           $bundle = $entityTypeId;
+        }
+      }
+
+      // Validate bundle exists.
+      if ($bundle !== NULL) {
+        $validBundles = $this->bundleInfo->getBundleInfo($entityTypeId);
+        if (!isset($validBundles[$bundle])) {
+          return ['error' => "Bundle not found: {$bundle} (valid bundles for {$entityTypeId}: " . implode(', ', array_keys($validBundles)) . ')'];
         }
       }
 
@@ -117,12 +127,13 @@ class DrupalTools {
    */
   public function listModules(?string $nameContains = NULL): array {
     try {
+      $allInfo = $this->moduleExtensionList->getAllInstalledInfo();
       $modules = [];
       foreach ($this->moduleHandler->getModuleList() as $name => $extension) {
         if ($nameContains !== NULL && !str_contains($name, $nameContains)) {
           continue;
         }
-        $info = $extension->info ?? [];
+        $info = $allInfo[$name] ?? [];
         $modules[] = [
           'name' => $name,
           'human_name' => $info['name'] ?? $name,
@@ -148,6 +159,7 @@ class DrupalTools {
       if ($name !== NULL) {
         $config = $this->configFactory->get($name);
         $data = $config->getRawData();
+        unset($data['_core']);
         if (empty($data)) {
           return ['error' => "Config not found or empty: {$name}"];
         }

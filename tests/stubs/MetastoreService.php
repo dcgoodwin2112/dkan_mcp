@@ -29,8 +29,25 @@ class MetastoreService {
     return new \stdClass();
   }
 
+  public static function removeReferences(RootedJsonData $data): void {
+    $json = (string) $data;
+    $decoded = json_decode($json, TRUE);
+    if (is_array($decoded)) {
+      foreach (array_keys($decoded) as $key) {
+        if (str_starts_with($key, '%Ref:')) {
+          unset($decoded[$key]);
+        }
+      }
+      $data->set('$', json_decode(json_encode($decoded)));
+    }
+  }
+
   public function post(string $schema_id, RootedJsonData $data): string {
     return '';
+  }
+
+  public function publish(string $schema_id, string $identifier): bool {
+    return TRUE;
   }
 
 }
