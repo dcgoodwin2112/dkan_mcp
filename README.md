@@ -1,6 +1,6 @@
 # DKAN MCP
 
-MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 34 tools: 29 read-only for discovery and querying, 5 write tools for cache management, module operations, and test data creation.
+MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 35 tools: 30 read-only for discovery and querying, 5 write tools for cache management, module operations, and test data creation.
 
 ## Why This Module Exists
 
@@ -166,6 +166,7 @@ Tools are organized by platform scope:
 |---|---|---|
 | `list_services` | `module?` | DKAN service IDs with class names |
 | `get_service_info` | `service_id` | Class, constructor dependencies, public method signatures |
+| `get_class_info` | `class_name` | Full public API of any class/interface: parent, interfaces, all methods with types and declaring class |
 | `list_events` | `module?` | Event constants with string values and declaring classes |
 | `get_event_info` | `event_name` | Event details with registered subscriber classes and methods |
 | `list_permissions` | `module?` | DKAN permissions with title, description, provider |

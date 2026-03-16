@@ -129,7 +129,7 @@ class McpServerFactory {
     $builder->addTool(
       handler: fn(string $uuid) => $this->metastoreTools->getDatasetInfo($uuid),
       name: 'get_dataset_info',
-      description: 'Get aggregated dataset lineage: distributions, resource versions, import status, and perspectives — all in one call.',
+      description: 'Get aggregated dataset info including all distribution details. Returns latest_revision.distributions[] with keys: distribution_uuid, resource_id, resource_version, mime_type, source_path, importer_status ("waiting"|"done"|"error"), importer_percent_done, importer_error, table_name, fetcher_status, fetcher_percent_done, file_path. Use this to discover the actual data structure of DatasetInfo::gather().',
       annotations: $readOnly,
       inputSchema: [
         'type' => 'object',
@@ -306,7 +306,7 @@ class McpServerFactory {
     $builder->addTool(
       handler: fn(string $event_name) => $this->eventTools->getEventInfo($event_name),
       name: 'get_event_info',
-      description: 'Get event details: declaring class, constant name, module, and registered subscribers with class and method names.',
+      description: 'Get event details: declaring class, constant name, module, subscribers, event class (from subscriber type hints), event class methods, and dispatch payload type (the actual object passed to getData() at the dispatch site). For events using Drupal\common\Events\Event, the dispatch_payload field shows what getData() returns.',
       annotations: $readOnly,
       inputSchema: [
         'type' => 'object',
@@ -324,7 +324,7 @@ class McpServerFactory {
     $builder->addTool(
       handler: fn(string $id) => $this->resourceTools->resolveResource($id),
       name: 'resolve_resource',
-      description: 'Trace the full reference chain for a resource: distribution UUID or resource_id (identifier__version) → perspectives (source, local_file, local_url) → datastore table name and import status.',
+      description: 'Trace the full reference chain for a resource: distribution UUID or resource_id (identifier__version) → perspectives (source, local_file, local_url) → datastore table name, import status, and dataset_uuid (reverse lookup to the owning dataset).',
       annotations: $readOnly,
       inputSchema: [
         'type' => 'object',
@@ -394,7 +394,7 @@ class McpServerFactory {
     $builder->addTool(
       handler: fn(string $service_id) => $this->serviceTools->getServiceInfo($service_id),
       name: 'get_service_info',
-      description: 'Get service details: class name, constructor dependencies (type hints), and public method signatures with parameter types and return types.',
+      description: 'Get service details: class name, constructor dependencies, public method signatures, and YAML definition (arguments, calls/setter injection, tags). Shows constructor params only — use get_class_info on the service class to find setter methods from calls: entries.',
       annotations: $readOnly,
       inputSchema: [
         'type' => 'object',
@@ -402,6 +402,23 @@ class McpServerFactory {
           'service_id' => ['type' => 'string', 'description' => 'Drupal service ID (e.g. dkan.metastore.service)'],
         ],
         'required' => ['service_id'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $class_name) => $this->serviceTools->getClassInfo($class_name),
+      name: 'get_class_info',
+      description: 'Get the full public API of any PHP class or interface: parent class, interfaces, and all public methods with parameter types, return types, and declaring class. Use to follow return types from get_service_info.',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'class_name' => [
+            'type' => 'string',
+            'description' => 'Fully-qualified PHP class or interface name (e.g., Drupal\\datastore\\Storage\\DatabaseTable)',
+          ],
+        ],
+        'required' => ['class_name'],
       ],
     );
   }

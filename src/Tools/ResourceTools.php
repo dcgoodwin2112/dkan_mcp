@@ -2,6 +2,7 @@
 
 namespace Drupal\dkan_mcp\Tools;
 
+use Drupal\common\DatasetInfo;
 use Drupal\datastore\DatastoreService;
 use Drupal\metastore\MetastoreService;
 use Drupal\metastore\ResourceMapper;
@@ -20,6 +21,7 @@ class ResourceTools {
     protected MetastoreService $metastore,
     protected ResourceMapper $resourceMapper,
     protected DatastoreService $datastoreService,
+    protected DatasetInfo $datasetInfo,
   ) {}
 
   /**
@@ -75,11 +77,14 @@ class ResourceTools {
       // Get import status.
       $importStatus = $this->getImportStatus($identifier, $version);
 
+      $datasetUuid = $this->findOwningDataset($identifier);
+
       return [
         'distribution_uuid' => $distributionUuid,
         'resource_identifier' => $identifier,
         'resource_version' => $version,
         'resource_id' => $identifier . '__' . $version,
+        'dataset_uuid' => $datasetUuid,
         'perspectives' => $perspectives,
         'datastore_table' => $datastoreTable,
         'import_status' => $importStatus,
@@ -115,6 +120,38 @@ class ResourceTools {
     }
 
     return ['identifier' => $identifier, 'version' => (string) $version];
+  }
+
+  /**
+   * Find the dataset UUID that owns a given resource identifier.
+   */
+  protected function findOwningDataset(string $identifier): ?string {
+    try {
+      $datasets = $this->metastore->getAll('dataset');
+      foreach ($datasets as $dataset) {
+        $data = json_decode((string) $dataset);
+        $uuid = $data->identifier ?? NULL;
+        if (!$uuid) {
+          continue;
+        }
+        try {
+          $info = $this->datasetInfo->gather($uuid);
+        }
+        catch (\Exception) {
+          continue;
+        }
+        $distributions = $info['latest_revision']['distributions'] ?? [];
+        foreach ($distributions as $dist) {
+          if (isset($dist['resource_id']) && $dist['resource_id'] === $identifier) {
+            return $uuid;
+          }
+        }
+      }
+    }
+    catch (\Exception) {
+      // Fall through to return NULL.
+    }
+    return NULL;
   }
 
   /**
