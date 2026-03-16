@@ -169,6 +169,90 @@ class EventToolsTest extends TestCase {
     }
   }
 
+  public function testGetEventInfoIncludesEventClass(): void {
+    [$container, $dispatcher] = $this->createDefaultMocks();
+    $service = new EventToolsTestServiceA();
+
+    $container->method('getServiceIds')->willReturn(['dkan.test.a']);
+    $container->method('get')->willReturn($service);
+
+    $subscriber = new EventToolsTypedSubscriber();
+    $dispatcher->method('getListeners')
+      ->with('test_event_something')
+      ->willReturn([[$subscriber, 'onSomething']]);
+
+    $tools = $this->createTools($container, $dispatcher);
+    $result = $tools->getEventInfo('test_event_something');
+
+    $this->assertArrayHasKey('event_class', $result);
+    $this->assertEquals(EventToolsTestEvent::class, $result['event_class']);
+    $this->assertArrayHasKey('event_methods', $result);
+    $methodNames = array_column($result['event_methods'], 'name');
+    $this->assertContains('getData', $methodNames);
+    $this->assertContains('getResourceId', $methodNames);
+  }
+
+  public function testGetEventInfoNoEventClassWhenUntypedSubscriber(): void {
+    [$container, $dispatcher] = $this->createDefaultMocks();
+    $service = new EventToolsTestServiceA();
+
+    $container->method('getServiceIds')->willReturn(['dkan.test.a']);
+    $container->method('get')->willReturn($service);
+
+    $subscriber = new EventToolsTestSubscriber();
+    $dispatcher->method('getListeners')
+      ->with('test_event_something')
+      ->willReturn([[$subscriber, 'onSomething']]);
+
+    $tools = $this->createTools($container, $dispatcher);
+    $result = $tools->getEventInfo('test_event_something');
+
+    $this->assertArrayNotHasKey('event_class', $result);
+    $this->assertArrayNotHasKey('event_methods', $result);
+  }
+
+  public function testGetEventInfoIncludesDispatchPayload(): void {
+    [$container, $dispatcher] = $this->createDefaultMocks();
+    $service = new EventToolsTestPayloadService();
+
+    $container->method('getServiceIds')->willReturn(['dkan.test.payload']);
+    $container->method('get')->willReturn($service);
+
+    $subscriber = new EventToolsTestSubscriber();
+    $dispatcher->method('getListeners')
+      ->with('dkan_metastore_dataset_update')
+      ->willReturn([[$subscriber, 'onSomething']]);
+
+    $tools = $this->createTools($container, $dispatcher);
+    $result = $tools->getEventInfo('dkan_metastore_dataset_update');
+
+    $this->assertArrayHasKey('dispatch_payload', $result);
+    $this->assertEquals(
+      'Drupal\metastore\MetastoreItemInterface',
+      $result['dispatch_payload']['type']
+    );
+    $this->assertEquals(
+      'Drupal\metastore\LifeCycle\LifeCycle::datasetUpdate',
+      $result['dispatch_payload']['dispatch_site']
+    );
+    $this->assertArrayHasKey('methods', $result['dispatch_payload']);
+  }
+
+  public function testGetEventInfoNoDispatchPayloadForUnmappedEvent(): void {
+    [$container, $dispatcher] = $this->createDefaultMocks();
+    $service = new EventToolsTestServiceA();
+
+    $container->method('getServiceIds')->willReturn(['dkan.test.a']);
+    $container->method('get')->willReturn($service);
+
+    $dispatcher->method('getListeners')->willReturn([]);
+
+    $tools = $this->createTools($container, $dispatcher);
+    $result = $tools->getEventInfo('test_event_something');
+
+    $this->assertArrayNotHasKey('dispatch_payload', $result);
+  }
+
   public function testInheritedConstantsExcluded(): void {
     [$container, $dispatcher] = $this->createDefaultMocks();
     $service = new EventToolsTestChildService();
@@ -212,5 +296,29 @@ class EventToolsTestChildService extends EventToolsTestServiceA {
 class EventToolsTestSubscriber {
 
   public function onSomething(): void {}
+
+}
+
+class EventToolsTestEvent {
+
+  public function getData(): array {
+    return [];
+  }
+
+  public function getResourceId(): string {
+    return '';
+  }
+
+}
+
+class EventToolsTestPayloadService {
+
+  const EVENT_DATASET_UPDATE = 'dkan_metastore_dataset_update';
+
+}
+
+class EventToolsTypedSubscriber {
+
+  public function onSomething(EventToolsTestEvent $event): void {}
 
 }

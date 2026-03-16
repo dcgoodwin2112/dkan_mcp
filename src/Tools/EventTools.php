@@ -20,6 +20,35 @@ class EventTools {
     'Drupal\datastore\SqlEndpoint\WebServiceApi',
   ];
 
+  /**
+   * Curated mapping of event names to their dispatch-site payload types.
+   *
+   * For events using Drupal\common\Events\Event, getData() returns mixed.
+   * This map records the actual type passed at the dispatch site.
+   */
+  protected const EVENT_PAYLOAD_TYPES = [
+    'dkan_metastore_dataset_update' => [
+      'type' => 'Drupal\metastore\MetastoreItemInterface',
+      'dispatch_site' => 'Drupal\metastore\LifeCycle\LifeCycle::datasetUpdate',
+    ],
+    'dkan_metastore_metadata_pre_reference' => [
+      'type' => 'Drupal\metastore\MetastoreItemInterface',
+      'dispatch_site' => 'Drupal\metastore\LifeCycle\LifeCycle::preReference',
+    ],
+    'dkan_metastore_dataset_insert' => [
+      'type' => 'Drupal\metastore\MetastoreItemInterface',
+      'dispatch_site' => 'Drupal\metastore\LifeCycle\LifeCycle::datasetInsert',
+    ],
+    'dkan_metastore_dataset_pre_reference' => [
+      'type' => 'Drupal\metastore\MetastoreItemInterface',
+      'dispatch_site' => 'Drupal\metastore\LifeCycle\LifeCycle::preReference',
+    ],
+    'dkan_metastore_metadata_registration' => [
+      'type' => 'Drupal\metastore\MetastoreItemInterface',
+      'dispatch_site' => 'Drupal\metastore\LifeCycle\LifeCycle::registration',
+    ],
+  ];
+
   public function __construct(
     protected ContainerInterface $container,
     protected EventDispatcherInterface $eventDispatcher,
@@ -77,6 +106,24 @@ class EventTools {
     }
 
     $match['subscribers'] = $subscribers;
+
+    // Determine event class from subscriber type hints.
+    $eventClass = $this->resolveEventClass($listeners);
+    if ($eventClass) {
+      $match['event_class'] = $eventClass;
+      $match['event_methods'] = $this->getEventClassMethods($eventClass);
+    }
+
+    // Append dispatch payload type for events where getData() returns mixed.
+    if (isset(static::EVENT_PAYLOAD_TYPES[$eventName])) {
+      $payload = static::EVENT_PAYLOAD_TYPES[$eventName];
+      $match['dispatch_payload'] = [
+        'type' => $payload['type'],
+        'dispatch_site' => $payload['dispatch_site'],
+        'methods' => $this->getEventClassMethods($payload['type']),
+      ];
+    }
+
     return $match;
   }
 
@@ -171,6 +218,60 @@ class EventTools {
     }
 
     return $events;
+  }
+
+  /**
+   * Resolve the event class from subscriber parameter type hints.
+   */
+  protected function resolveEventClass(array $listeners): ?string {
+    foreach ($listeners as $listener) {
+      if (!is_array($listener) || count($listener) !== 2 || !is_object($listener[0])) {
+        continue;
+      }
+      try {
+        $ref = new \ReflectionMethod($listener[0], $listener[1]);
+        $params = $ref->getParameters();
+        if (!empty($params) && $params[0]->getType() instanceof \ReflectionNamedType) {
+          $typeName = $params[0]->getType()->getName();
+          if (class_exists($typeName) || interface_exists($typeName)) {
+            return $typeName;
+          }
+        }
+      }
+      catch (\ReflectionException) {
+        continue;
+      }
+    }
+    return NULL;
+  }
+
+  /**
+   * Get public methods of an event class for inline display.
+   */
+  protected function getEventClassMethods(string $className): array {
+    try {
+      $reflection = new \ReflectionClass($className);
+    }
+    catch (\ReflectionException) {
+      return [];
+    }
+
+    $methods = [];
+    foreach ($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+      if (str_starts_with($method->getName(), '_')) {
+        continue;
+      }
+      $params = array_map(fn(\ReflectionParameter $p) => array_filter([
+        'name' => $p->getName(),
+        'type' => $p->getType() ? (string) $p->getType() : NULL,
+      ], fn($v) => $v !== NULL), $method->getParameters());
+      $methods[] = [
+        'name' => $method->getName(),
+        'params' => array_values($params),
+        'return_type' => $method->getReturnType() ? (string) $method->getReturnType() : NULL,
+      ];
+    }
+    return $methods;
   }
 
   /**

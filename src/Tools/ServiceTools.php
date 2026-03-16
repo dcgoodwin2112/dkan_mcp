@@ -3,6 +3,8 @@
 namespace Drupal\dkan_mcp\Tools;
 
 use Drupal\Component\DependencyInjection\ContainerInterface;
+use Drupal\Core\Extension\ModuleHandlerInterface;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * MCP tools for DKAN service introspection.
@@ -11,6 +13,7 @@ class ServiceTools {
 
   public function __construct(
     protected ContainerInterface $container,
+    protected ModuleHandlerInterface $moduleHandler,
   ) {}
 
   /**
@@ -36,6 +39,50 @@ class ServiceTools {
     }
 
     return ['services' => $services, 'total' => count($services)];
+  }
+
+  /**
+   * Get the full public API of any PHP class or interface.
+   */
+  public function getClassInfo(string $className): array {
+    if (!class_exists($className) && !interface_exists($className)) {
+      return ['error' => "Class or interface not found: {$className}"];
+    }
+
+    $reflection = new \ReflectionClass($className);
+
+    $methods = [];
+    foreach ($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+      if (str_starts_with($method->getName(), '_')) {
+        continue;
+      }
+      $params = array_map(fn(\ReflectionParameter $p) => array_filter([
+        'name' => $p->getName(),
+        'type' => $p->getType() ? (string) $p->getType() : NULL,
+        'optional' => $p->isOptional() ?: NULL,
+      ], fn($v) => $v !== NULL), $method->getParameters());
+      $methods[] = [
+        'name' => $method->getName(),
+        'params' => array_values($params),
+        'return_type' => $method->getReturnType() ? (string) $method->getReturnType() : NULL,
+        'declared_in' => $method->getDeclaringClass()->getName(),
+      ];
+    }
+
+    $parent = $reflection->getParentClass();
+    $interfaces = array_values(array_map(
+      fn(\ReflectionClass $i) => $i->getName(),
+      $reflection->getInterfaces()
+    ));
+
+    return [
+      'class' => $className,
+      'is_abstract' => $reflection->isAbstract(),
+      'is_interface' => $reflection->isInterface(),
+      'parent' => $parent ? $parent->getName() : NULL,
+      'interfaces' => $interfaces,
+      'methods' => $methods,
+    ];
   }
 
   /**
@@ -92,12 +139,54 @@ class ServiceTools {
       ];
     }
 
-    return [
+    $result = [
       'service_id' => $serviceId,
       'class' => $class,
       'constructor_params' => $constructorParams,
       'methods' => $methods,
     ];
+
+    $yamlDef = $this->findServiceYamlDefinition($serviceId);
+    if ($yamlDef) {
+      $result['yaml_definition'] = $yamlDef;
+    }
+
+    return $result;
+  }
+
+  /**
+   * Find a service's YAML definition from module services.yml files.
+   */
+  protected function findServiceYamlDefinition(string $serviceId): ?array {
+    foreach ($this->moduleHandler->getModuleList() as $name => $module) {
+      $path = $module->getPath() . '/' . $name . '.services.yml';
+      if (!file_exists($path)) {
+        continue;
+      }
+      try {
+        $contents = file_get_contents($path);
+        $parsed = Yaml::parse($contents);
+      }
+      catch (\Exception) {
+        continue;
+      }
+      if (!isset($parsed['services'][$serviceId])) {
+        continue;
+      }
+      $def = $parsed['services'][$serviceId];
+      $result = [];
+      if (isset($def['arguments'])) {
+        $result['arguments'] = $def['arguments'];
+      }
+      if (isset($def['calls'])) {
+        $result['calls'] = $def['calls'];
+      }
+      if (isset($def['tags'])) {
+        $result['tags'] = $def['tags'];
+      }
+      return $result ?: NULL;
+    }
+    return NULL;
   }
 
 }
