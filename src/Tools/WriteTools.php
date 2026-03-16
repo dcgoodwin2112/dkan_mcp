@@ -2,6 +2,7 @@
 
 namespace Drupal\dkan_mcp\Tools;
 
+use Drupal\Component\Uuid\Php as UuidGenerator;
 use Drupal\Core\Cache\Cache;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Extension\ModuleInstallerInterface;
@@ -34,7 +35,7 @@ class WriteTools {
         'message' => 'All cache bins cleared. For a full container rebuild (services.yml changes), restart the MCP server.',
       ];
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       return ['error' => $e->getMessage()];
     }
   }
@@ -57,7 +58,7 @@ class WriteTools {
         'message' => "Module '{$moduleName}' enabled. Restart the MCP server if the module registers new services or routes.",
       ];
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       return ['error' => $e->getMessage()];
     }
   }
@@ -80,7 +81,7 @@ class WriteTools {
         'message' => "Module '{$moduleName}' uninstalled. Restart the MCP server if the module had registered services or routes.",
       ];
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       return ['error' => $e->getMessage()];
     }
   }
@@ -90,7 +91,9 @@ class WriteTools {
    */
   public function createTestDataset(string $title, string $downloadUrl): array {
     try {
+      $uuid = (new UuidGenerator())->generate();
       $dataset = (object) [
+        'identifier' => $uuid,
         'title' => $title,
         'description' => "Test dataset: {$title}",
         'accessLevel' => 'public',
@@ -105,14 +108,15 @@ class WriteTools {
       ];
 
       $identifier = $this->metastoreService->post('dataset', new RootedJsonData(json_encode($dataset)));
+      $this->metastoreService->publish('dataset', $identifier);
 
       return [
         'status' => 'success',
         'identifier' => $identifier,
-        'message' => "Dataset created. Use list_distributions with this identifier to get the resource_id, then call import_resource to trigger import.",
+        'message' => "Dataset created and published. Distribution references may need cron to fully resolve. Use get_dataset_info to check status, then list_distributions to get resource_id.",
       ];
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       return ['error' => $e->getMessage()];
     }
   }
@@ -126,16 +130,27 @@ class WriteTools {
 
       $result = $this->datastoreService->import($identifier, $deferred, $version);
 
+      $hasError = FALSE;
+      $errors = [];
+      foreach ($result as $key => $resultObj) {
+        if (is_object($resultObj) && method_exists($resultObj, 'getStatus')
+            && $resultObj->getStatus() === 'error') {
+          $hasError = TRUE;
+          $errors[] = $key . ': ' . $resultObj->getError();
+        }
+      }
+
       return [
-        'status' => 'success',
+        'status' => $hasError ? 'error' : 'success',
         'resource_id' => $resourceId,
         'import_result' => $result,
+        'errors' => $errors ?: NULL,
         'message' => $deferred
           ? 'Import queued. Use get_import_status to check progress.'
-          : 'Import completed. Use get_import_status to verify.',
+          : ($hasError ? 'Import completed with errors.' : 'Import completed. Use get_import_status to verify.'),
       ];
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       return ['error' => $e->getMessage()];
     }
   }
@@ -144,6 +159,7 @@ class WriteTools {
    * Parse a resource_id into [identifier, version].
    *
    * @return array{string, string|null}
+   *   The identifier and version.
    */
   protected function parseResourceId(string $resourceId): array {
     if (str_contains($resourceId, '__')) {

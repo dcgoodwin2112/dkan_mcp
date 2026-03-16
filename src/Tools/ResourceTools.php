@@ -62,11 +62,18 @@ class ResourceTools {
         }
       }
 
-      // Compute datastore table name.
-      $datastoreTable = 'datastore_' . md5($identifier . '__' . $version . '__source');
+      // Get datastore table name from storage if available.
+      $datastoreTable = NULL;
+      try {
+        $storage = $this->datastoreService->getStorage($identifier, $version);
+        $datastoreTable = $storage->getTableName();
+      }
+      catch (\Exception) {
+        // Storage not available (resource not yet imported).
+      }
 
       // Get import status.
-      $importStatus = $this->getImportStatus($identifier);
+      $importStatus = $this->getImportStatus($identifier, $version);
 
       return [
         'distribution_uuid' => $distributionUuid,
@@ -95,11 +102,11 @@ class ResourceTools {
     }
 
     $data = json_decode((string) $distribution);
-    if (!isset($data->{'%Ref:downloadURL'}[0]->data)) {
+    if (!isset($data->data->{'%Ref:downloadURL'}[0]->data)) {
       return ['error' => "Distribution {$uuid} has no resource reference (%Ref:downloadURL)"];
     }
 
-    $ref = $data->{'%Ref:downloadURL'}[0]->data;
+    $ref = $data->data->{'%Ref:downloadURL'}[0]->data;
     $identifier = $ref->identifier ?? NULL;
     $version = $ref->version ?? NULL;
 
@@ -113,12 +120,14 @@ class ResourceTools {
   /**
    * Get import status for a resource.
    */
-  protected function getImportStatus(string $identifier): string {
+  protected function getImportStatus(string $identifier, string $version): string {
     try {
-      $summary = $this->datastoreService->summary($identifier);
-      return $summary['numOfRows'] ?? 0 > 0 ? 'done' : 'pending';
+      $resourceId = $identifier . '__' . $version;
+      $summary = $this->datastoreService->summary($resourceId);
+      $numOfRows = is_object($summary) ? ($summary->numOfRows ?? 0) : ($summary['numOfRows'] ?? 0);
+      return $numOfRows > 0 ? 'done' : 'pending';
     }
-    catch (\Exception) {
+    catch (\Throwable) {
       return 'not_imported';
     }
   }

@@ -20,9 +20,20 @@ class SearchToolsTest extends TestCase {
   }
 
   public function testSearchDatasetsSuccess(): void {
+    $longDesc = str_repeat('A', 300);
     $body = json_encode([
       'results' => [
-        ['identifier' => 'abc-123', 'title' => 'Test Dataset'],
+        [
+          'identifier' => 'abc-123',
+          'title' => 'Test Dataset',
+          'description' => $longDesc,
+          'distribution' => [
+            ['downloadURL' => 'http://example.com/a.csv'],
+            ['downloadURL' => 'http://example.com/b.csv'],
+          ],
+          'keyword' => ['test', 'data'],
+          '%Ref:distribution' => ['extra' => 'data'],
+        ],
       ],
       'total' => 1,
     ]);
@@ -35,9 +46,34 @@ class SearchToolsTest extends TestCase {
     $result = $tools->searchDatasets('test');
 
     $this->assertCount(1, $result['results']);
-    $this->assertEquals(1, $result['total']);
+    $this->assertSame(1, $result['total']);
     $this->assertEquals(1, $result['page']);
     $this->assertEquals(10, $result['page_size']);
+
+    $item = $result['results'][0];
+    $this->assertEquals('abc-123', $item['identifier']);
+    $this->assertEquals('Test Dataset', $item['title']);
+    $this->assertEquals(200, mb_strlen($item['description']));
+    $this->assertEquals(2, $item['distributions']);
+    // Only normalized keys should be present.
+    $this->assertArrayNotHasKey('keyword', $item);
+    $this->assertArrayNotHasKey('%Ref:distribution', $item);
+  }
+
+  public function testSearchDatasetsTotalCastToInt(): void {
+    $body = json_encode([
+      'results' => [],
+      'total' => '42',
+    ]);
+
+    $client = $this->createMock(ClientInterface::class);
+    $client->method('request')->willReturn(new Response(200, [], $body));
+
+    $request = SymfonyRequest::create('http://example.com');
+    $tools = $this->createTools($client, $request);
+    $result = $tools->searchDatasets('test');
+
+    $this->assertSame(42, $result['total']);
   }
 
   public function testSearchDatasetsHttpError(): void {

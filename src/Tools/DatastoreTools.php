@@ -3,6 +3,7 @@
 namespace Drupal\dkan_mcp\Tools;
 
 use Drupal\datastore\DatastoreService;
+use Drupal\datastore\Service\DatastoreQuery;
 use Drupal\datastore\Service\Query;
 
 /**
@@ -35,7 +36,6 @@ class DatastoreTools {
       'offset' => $offset,
       'count' => TRUE,
       'results' => TRUE,
-      'schema' => TRUE,
       'keys' => TRUE,
     ];
 
@@ -46,9 +46,10 @@ class DatastoreTools {
 
     if ($conditions) {
       $parsed = json_decode($conditions, TRUE);
-      if (is_array($parsed)) {
-        $query['conditions'] = $parsed;
+      if (!is_array($parsed) || !array_is_list($parsed)) {
+        return ['error' => 'Invalid conditions: must be a JSON array of condition objects, e.g. [{"property":"col","value":"val","operator":"="}]'];
       }
+      $query['conditions'] = $parsed;
     }
 
     if ($sortField) {
@@ -61,7 +62,7 @@ class DatastoreTools {
     }
 
     try {
-      $datastoreQuery = new \Drupal\datastore\Service\DatastoreQuery(
+      $datastoreQuery = new DatastoreQuery(
         json_encode($query),
         $limit,
       );
@@ -70,8 +71,8 @@ class DatastoreTools {
 
       return [
         'results' => $decoded['results'] ?? [],
-        'count' => $decoded['count'] ?? 0,
-        'schema' => $decoded['schema'] ?? [],
+        'result_count' => count($decoded['results'] ?? []),
+        'total_rows' => $decoded['count'] ?? 0,
         'limit' => $limit,
         'offset' => $offset,
       ];
@@ -96,11 +97,14 @@ class DatastoreTools {
           if ($name === 'record_number') {
             continue;
           }
-          $columns[] = [
+          $col = [
             'name' => $name,
             'type' => $definition['type'] ?? 'unknown',
-            'description' => $definition['description'] ?? NULL,
           ];
+          if (!empty($definition['description'])) {
+            $col['description'] = $definition['description'];
+          }
+          $columns[] = $col;
         }
       }
 
@@ -117,10 +121,17 @@ class DatastoreTools {
   public function getImportStatus(string $resourceId): array {
     try {
       $summary = $this->datastoreService->summary($resourceId);
-      return ['resource_id' => $resourceId, 'status' => $summary];
+      $numOfRows = is_object($summary) ? ($summary->numOfRows ?? 0) : ($summary['numOfRows'] ?? 0);
+      $numOfColumns = is_object($summary) ? ($summary->numOfColumns ?? 0) : ($summary['numOfColumns'] ?? 0);
+      return [
+        'resource_id' => $resourceId,
+        'status' => $numOfRows > 0 ? 'done' : 'pending',
+        'num_of_rows' => $numOfRows,
+        'num_of_columns' => $numOfColumns,
+      ];
     }
     catch (\Exception $e) {
-      return ['error' => $e->getMessage()];
+      return ['resource_id' => $resourceId, 'status' => 'not_imported', 'error' => $e->getMessage()];
     }
   }
 
@@ -128,6 +139,7 @@ class DatastoreTools {
    * Parse a resource_id string into [identifier, version].
    *
    * @return array{string, string|null}
+   *   The identifier and version.
    */
   protected function parseResourceId(string $resourceId): array {
     if (str_contains($resourceId, '__')) {
