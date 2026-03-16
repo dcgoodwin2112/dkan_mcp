@@ -40,6 +40,7 @@ services:
     class: Drupal\dkan_mcp\Tools\ServiceTools
     arguments:
       - '@service_container'
+      - '@module_handler'
 
   dkan_mcp.tools.event:
     class: Drupal\dkan_mcp\Tools\EventTools
@@ -53,6 +54,7 @@ services:
       - '@dkan.metastore.service'
       - '@dkan.metastore.resource_mapper'
       - '@dkan.datastore.service'
+      - '@dkan.common.dataset_info'
 
   dkan_mcp.tools.permission:
     class: Drupal\dkan_mcp\Tools\PermissionTools

@@ -16,18 +16,19 @@ Use `search_datasets(keyword)` as an alternative to step 1 when you know a keywo
 ### Service Discovery → Dependency Injection
 
 1. `list_services(module: "datastore")` — find service IDs in a module
-2. `get_service_info(service_id)` — get constructor params, method signatures with types
-3. Write `*.services.yml` arguments and constructor type hints from the response
+2. `get_service_info(service_id)` — get constructor params, method signatures, and YAML definition (including `calls` for setter injection and `tags`)
+3. `get_class_info(class_name)` — follow return types to discover the full API of returned objects (e.g., `getStorage()` returns `DatabaseTable` → inspect its `query(Query)` method → inspect `Query` class)
+4. Write `*.services.yml` arguments and constructor type hints from the response
 
-The method signatures include parameter names, types, optionality, and return types — enough to write working service calls without reading source code.
+The method signatures include parameter names, types, optionality, and return types — enough to write working service calls without reading source code. The `yaml_definition` field reveals setter injection (`calls`) and service tags not visible from constructor reflection alone.
 
 ### Event-Driven Extension
 
 1. `list_events(module: "metastore")` — find event constants and string values
-2. `get_event_info(event_name)` — see declaring class and existing subscribers
+2. `get_event_info(event_name)` — see declaring class, existing subscribers, event class, event class methods, and **dispatch_payload** (the type returned by `getData()` at the dispatch site — e.g., `MetastoreItemInterface` for dataset events)
 3. Write an EventSubscriber with appropriate priority (check existing subscriber priorities to avoid conflicts)
 
-**Limitation**: `get_event_info` returns subscriber classes/methods but not event object data structure. Read the event class source to know what data is available in the subscriber callback.
+`get_event_info` includes `event_class`, `event_methods` (from subscriber type hints), and `dispatch_payload` (the actual type passed to `getData()` at the dispatch site). For events using `Drupal\common\Events\Event`, the `dispatch_payload.type` field reveals what `getData()` returns (e.g., `MetastoreItemInterface`), with `dispatch_payload.methods` listing its API.
 
 ### Permission-Aware Development
 
@@ -63,6 +64,16 @@ Discover Drupal runtime state without guessing entity types, field names, module
 **Config discovery**: `get_config(prefix: "system.")` → `get_config(name: "system.site")` → understand site state
 
 **Route discovery**: `get_route_info(path: "/api/1/")` → understand existing pages and access requirements
+
+### Data Structure Discovery
+
+When you need the array structure returned by a DKAN method (e.g., `gather()` returns `array`):
+
+1. `get_dataset_info(uuid)` — returns the **actual** `DatasetInfo::gather()` output with all plugin-contributed keys. Inspect the response to see exact keys like `importer_status`, `table_name`, `fetcher_status`.
+2. `resolve_resource(resource_id)` — returns actual resource data including `import_status`, `datastore_table`, `dataset_uuid` (reverse lookup to owning dataset)
+3. `query_datastore(resource_id, limit: 1)` — returns actual data to verify column names/types
+
+**Do NOT rely solely on `get_class_info` for methods returning `array` or `mixed`.** The return type won't tell you the array keys. Instead, call the MCP tool that invokes the method and inspect the real output.
 
 ## Resource ID Bridging
 
@@ -112,7 +123,11 @@ Accepts DKAN module names: `metastore`, `datastore`, `harvest`, `common`, `metas
 |---|---|
 | Passing distribution UUID to `query_datastore` | Use `resource_id` from `list_distributions` (`identifier__version` format) |
 | Passing distribution UUID to `resolve_resource` | Works correctly; `list_distributions` is still the preferred bridge for getting `resource_id` from a dataset |
-| Assuming `get_event_info` returns event payload shape | Read the event class source for data structure; `get_event_info` only returns subscribers |
+| Relying on `get_class_info` for array return structures | Use `get_dataset_info` to see actual `gather()` output with all keys including plugin-contributed ones (`importer_status`, `table_name`, etc.) |
+| Missing resource→dataset reverse lookup | `resolve_resource` returns `dataset_uuid` — use this instead of iterating all datasets |
+| Missing error handling in event subscribers | Always wrap scorer/service calls in try/catch to prevent breaking the event flow |
+| Guessing return type APIs from `get_service_info` | Use `get_class_info` to follow return types — e.g., `getStorage()` returns `DatabaseTable`, call `get_class_info("Drupal\\datastore\\Storage\\DatabaseTable")` to see its methods |
+| Missing setter injection from `get_service_info` | Check the `yaml_definition.calls` field for setter injection methods not visible in the constructor |
 | Using `get_service_info` output without checking `accessCheck()` | If a method signature shows entity queries, the code may need `->accessCheck(TRUE/FALSE)` — `get_service_info` doesn't surface this |
 | Querying a resource before import completes | Call `get_import_status` first; status must be `done` |
 | Guessing entity types, field names, or bundles | Use `list_entity_types` and `get_entity_fields` to discover them |
@@ -126,7 +141,13 @@ Accepts DKAN module names: `metastore`, `datastore`, `harvest`, `common`, `metas
 | Live data, actual schemas, row counts | `query_datastore`, `get_datastore_schema` | — |
 | Current permissions and role assignments | `list_permissions`, `get_permission_info` | — |
 | Service constructor params, method signatures | `get_service_info` | — |
+| Full public API of any class/interface | `get_class_info` | — |
 | Which events exist and who subscribes | `list_events`, `get_event_info` | — |
+| Event class and method signatures | `get_event_info` (includes `event_class` + `event_methods`) | — |
+| Event dispatch payload type (`getData()` returns) | `get_event_info` (includes `dispatch_payload`) | — |
+| Data structure of methods returning `array` | `get_dataset_info`, `resolve_resource`, `query_datastore` | — |
+| Service YAML definition (setter injection, tags) | `get_service_info` (includes `yaml_definition`) | — |
+| Resource→dataset reverse lookup | `resolve_resource` (includes `dataset_uuid`) | — |
 | Import/harvest state | `get_import_status`, `get_harvest_runs` | — |
 | **Drupal** | | |
 | Entity types, bundles, field definitions | `list_entity_types`, `get_entity_fields` | — |
@@ -136,7 +157,6 @@ Accepts DKAN module names: `metastore`, `datastore`, `harvest`, `common`, `metas
 | Route paths, controllers, access | `get_route_info` | — |
 | **Always use code reading** | | |
 | Method behavior and internal logic | — | Read source code |
-| Event payload/data structure | — | Read event class |
 | API request/response contracts | — | Read `docs/dkan-api.md` |
 | Workflow sequences (what happens on CRUD) | — | Read `docs/dkan-workflows.md` |
 | Test patterns, mock-chain usage | — | Read `docs/dkan-testing.md` |
