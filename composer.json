@@ -4,7 +4,7 @@
   "type": "drupal-custom-module",
   "license": "GPL-2.0-or-later",
   "require": {
-    "drupal/core": "^10.2 || ^11"
+    "mcp/sdk": "^0.4"
   },
   "suggest": {
     "mcp/sdk": "^0.4 - Required at runtime. Install in module vendor: cd dkan_mcp && composer require mcp/sdk:^0.4 && composer run-script post-install-cleanup"
@@ -16,6 +16,7 @@
     ]
   },
   "require-dev": {
+    "drupal/core": "^10.2 || ^11",
     "phpunit/phpunit": "^9 || ^10",
     "getdkan/mock-chain": "^1"
   },

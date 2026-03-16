@@ -37,9 +37,19 @@ class SearchTools {
 
       $data = json_decode((string) $response->getBody(), TRUE);
 
+      $results = [];
+      foreach ($data['results'] ?? [] as $dataset) {
+        $results[] = [
+          'identifier' => $dataset['identifier'] ?? NULL,
+          'title' => $dataset['title'] ?? NULL,
+          'description' => isset($dataset['description']) ? mb_substr($dataset['description'], 0, 200) : NULL,
+          'distributions' => isset($dataset['distribution']) ? count($dataset['distribution']) : 0,
+        ];
+      }
+
       return [
-        'results' => $data['results'] ?? [],
-        'total' => $data['total'] ?? 0,
+        'results' => $results,
+        'total' => (int) ($data['total'] ?? 0),
         'page' => $page,
         'page_size' => $pageSize,
       ];
@@ -49,6 +59,9 @@ class SearchTools {
     }
   }
 
+  /**
+   * Get the base URL for API requests.
+   */
   protected function getBaseUrl(): string {
     $request = $this->requestStack->getCurrentRequest();
     if ($request) {

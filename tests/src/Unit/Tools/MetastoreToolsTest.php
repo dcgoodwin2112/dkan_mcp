@@ -49,11 +49,37 @@ class MetastoreToolsTest extends TestCase {
     $this->assertEquals(100, $result['limit']);
   }
 
+  public function testListDatasetsCountAdjustment(): void {
+    $dataset1 = new RootedJsonData(json_encode([
+      'identifier' => 'abc-123',
+      'title' => 'Dataset 1',
+      'distribution' => [],
+    ]));
+    $dataset2 = new RootedJsonData(json_encode([
+      'identifier' => 'def-456',
+      'title' => 'Dataset 2',
+      'distribution' => [],
+    ]));
+
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('getAll')->willReturn([$dataset1, $dataset2]);
+    // count() returns more than actual valid items.
+    $metastore->method('count')->willReturn(5);
+
+    $tools = $this->createTools($metastore);
+    $result = $tools->listDatasets(0, 25);
+
+    // Total should be adjusted to actual item count since all fit in one page.
+    $this->assertEquals(2, $result['total']);
+  }
+
   public function testGetDataset(): void {
     $data = [
       'identifier' => 'abc-123',
       'title' => 'Test',
       'description' => 'Full description',
+      '%Ref:keyword' => [['identifier' => 'kw-1', 'data' => 'health']],
+      '%modified' => '2026-03-12T11:23:26-0400',
     ];
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('get')->willReturn(new RootedJsonData(json_encode($data)));
@@ -63,6 +89,8 @@ class MetastoreToolsTest extends TestCase {
 
     $this->assertArrayHasKey('dataset', $result);
     $this->assertEquals('abc-123', $result['dataset']['identifier']);
+    $this->assertArrayNotHasKey('%Ref:keyword', $result['dataset']);
+    $this->assertArrayNotHasKey('%modified', $result['dataset']);
   }
 
   public function testGetDatasetNotFound(): void {
@@ -79,11 +107,13 @@ class MetastoreToolsTest extends TestCase {
       'identifier' => 'abc-123',
       'distribution' => [
         [
-          'identifier' => 'dist-1',
           'title' => 'CSV File',
           'mediaType' => 'text/csv',
           'downloadURL' => 'http://example.com/data.csv',
         ],
+      ],
+      '%Ref:distribution' => [
+        ['identifier' => 'dist-1'],
       ],
     ];
     $metastore = $this->createMock(MetastoreService::class);
@@ -94,11 +124,22 @@ class MetastoreToolsTest extends TestCase {
 
     $this->assertCount(1, $result['distributions']);
     $this->assertEquals('dist-1', $result['distributions'][0]['identifier']);
+    $this->assertNotNull($result['distributions'][0]['identifier']);
     $this->assertEquals('text/csv', $result['distributions'][0]['mediaType']);
   }
 
   public function testGetDistribution(): void {
-    $data = ['identifier' => 'dist-1', 'mediaType' => 'text/csv'];
+    // Real DKAN structure: %Ref:downloadURL is nested inside 'data'.
+    $data = [
+      'identifier' => 'dist-1',
+      'data' => [
+        'downloadURL' => 'http://example.com/data.csv',
+        'mediaType' => 'text/csv',
+        '%Ref:downloadURL' => [
+          ['identifier' => 'res-1', 'data' => ['url' => 'http://example.com']],
+        ],
+      ],
+    ];
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('get')->willReturn(new RootedJsonData(json_encode($data)));
 
@@ -107,11 +148,17 @@ class MetastoreToolsTest extends TestCase {
 
     $this->assertArrayHasKey('distribution', $result);
     $this->assertEquals('dist-1', $result['distribution']['identifier']);
+    $this->assertArrayNotHasKey('%Ref:downloadURL', $result['distribution']['data']);
+    $this->assertEquals('http://example.com/data.csv', $result['distribution']['data']['downloadURL']);
   }
 
   public function testListSchemas(): void {
     $metastore = $this->createMock(MetastoreService::class);
-    $metastore->method('getSchemas')->willReturn(['dataset', 'distribution', 'keyword']);
+    $metastore->method('getSchemas')->willReturn([
+      'dataset' => (object) [],
+      'distribution' => (object) [],
+      'keyword' => (object) [],
+    ]);
 
     $tools = $this->createTools($metastore);
     $result = $tools->listSchemas();
@@ -120,7 +167,17 @@ class MetastoreToolsTest extends TestCase {
   }
 
   public function testGetCatalog(): void {
-    $catalog = (object) ['@type' => 'dcat:Catalog', 'dataset' => []];
+    $longDescription = str_repeat('A', 300);
+    $catalog = (object) [
+      '@type' => 'dcat:Catalog',
+      'dataset' => [
+        (object) [
+          'title' => 'Test',
+          'description' => $longDescription,
+          'spatial' => (object) ['type' => 'Polygon', 'coordinates' => []],
+        ],
+      ],
+    ];
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('getCatalog')->willReturn($catalog);
 
@@ -129,6 +186,10 @@ class MetastoreToolsTest extends TestCase {
 
     $this->assertArrayHasKey('catalog', $result);
     $this->assertEquals('dcat:Catalog', $result['catalog']['@type']);
+    // Description should be truncated to 200 chars.
+    $this->assertEquals(200, mb_strlen($result['catalog']['dataset'][0]['description']));
+    // Spatial should be stripped.
+    $this->assertArrayNotHasKey('spatial', $result['catalog']['dataset'][0]);
   }
 
   public function testGetDatasetInfo(): void {
@@ -177,7 +238,8 @@ class MetastoreToolsTest extends TestCase {
     $result = $tools->getDatasetInfo('nonexistent');
 
     $this->assertArrayHasKey('error', $result);
-    $this->assertEquals('Not found', $result['error']);
+    $this->assertStringContainsString('Not found', $result['error']);
+    $this->assertStringContainsString('nonexistent', $result['error']);
   }
 
 }

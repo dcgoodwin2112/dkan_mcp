@@ -21,7 +21,6 @@ class DatastoreToolsTest extends TestCase {
     $queryResult = new RootedJsonData(json_encode([
       'results' => [['name' => 'Alice', 'age' => '30']],
       'count' => 1,
-      'schema' => ['fields' => []],
     ]));
 
     $queryService = $this->createMock(Query::class);
@@ -32,14 +31,16 @@ class DatastoreToolsTest extends TestCase {
 
     $this->assertArrayHasKey('results', $result);
     $this->assertCount(1, $result['results']);
-    $this->assertEquals(1, $result['count']);
+    $this->assertEquals(1, $result['result_count']);
+    $this->assertEquals(1, $result['total_rows']);
+    $this->assertArrayNotHasKey('schema', $result);
+    $this->assertArrayNotHasKey('count', $result);
   }
 
   public function testQueryDatastoreWithFilters(): void {
     $queryResult = new RootedJsonData(json_encode([
       'results' => [['state' => 'CA']],
       'count' => 1,
-      'schema' => [],
     ]));
 
     $queryService = $this->createMock(Query::class);
@@ -54,7 +55,7 @@ class DatastoreToolsTest extends TestCase {
   }
 
   public function testQueryDatastoreClampLimit(): void {
-    $queryResult = new RootedJsonData('{"results":[],"count":0,"schema":{}}');
+    $queryResult = new RootedJsonData('{"results":[],"count":0}');
     $queryService = $this->createMock(Query::class);
     $queryService->method('runQuery')->willReturn($queryResult);
 
@@ -94,6 +95,8 @@ class DatastoreToolsTest extends TestCase {
     $this->assertEquals('name', $result['columns'][0]['name']);
     $this->assertEquals('varchar', $result['columns'][0]['type']);
     $this->assertEquals('Full name', $result['columns'][0]['description']);
+    // Column without description should not have the key.
+    $this->assertArrayNotHasKey('description', $result['columns'][1]);
   }
 
   public function testGetDatastoreSchemaError(): void {
@@ -103,6 +106,22 @@ class DatastoreToolsTest extends TestCase {
     $tools = $this->createTools(datastore: $datastore);
     $result = $tools->getDatastoreSchema('bad-id');
     $this->assertArrayHasKey('error', $result);
+  }
+
+  public function testQueryDatastoreInvalidConditions(): void {
+    $tools = $this->createTools();
+    $result = $tools->queryDatastore('test-resource', conditions: 'not valid json');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Invalid conditions', $result['error']);
+  }
+
+  public function testQueryDatastoreConditionsObject(): void {
+    $tools = $this->createTools();
+    $result = $tools->queryDatastore('test-resource', conditions: '{"property":"x","value":"y","operator":"="}');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('must be a JSON array', $result['error']);
   }
 
   public function testGetImportStatus(): void {
@@ -119,7 +138,34 @@ class DatastoreToolsTest extends TestCase {
     $result = $tools->getImportStatus('abc123__456');
 
     $this->assertEquals('abc123__456', $result['resource_id']);
-    $this->assertEquals(100, $result['status']['numOfRows']);
+    $this->assertEquals('done', $result['status']);
+    $this->assertEquals(100, $result['num_of_rows']);
+    $this->assertEquals(5, $result['num_of_columns']);
+  }
+
+  public function testGetImportStatusWithObject(): void {
+    $summary = (object) ['numOfRows' => 50, 'numOfColumns' => 3];
+    $datastore = $this->createMock(DatastoreService::class);
+    $datastore->method('summary')->willReturn($summary);
+
+    $tools = $this->createTools(datastore: $datastore);
+    $result = $tools->getImportStatus('abc123__456');
+
+    $this->assertEquals('done', $result['status']);
+    $this->assertEquals(50, $result['num_of_rows']);
+    $this->assertEquals(3, $result['num_of_columns']);
+  }
+
+  public function testGetImportStatusNotImported(): void {
+    $datastore = $this->createMock(DatastoreService::class);
+    $datastore->method('summary')->willThrowException(new \Exception('Resource not found'));
+
+    $tools = $this->createTools(datastore: $datastore);
+    $result = $tools->getImportStatus('nonexistent__123');
+
+    $this->assertEquals('nonexistent__123', $result['resource_id']);
+    $this->assertEquals('not_imported', $result['status']);
+    $this->assertArrayHasKey('error', $result);
   }
 
 }

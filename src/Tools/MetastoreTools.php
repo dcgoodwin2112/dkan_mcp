@@ -34,6 +34,12 @@ class MetastoreTools {
       ];
     }
 
+    // Adjust total if the full result set fits in one page,
+    // since count() may include items that fail validation.
+    if ($offset === 0 && count($items) < $limit) {
+      $total = count($items);
+    }
+
     return [
       'datasets' => $items,
       'total' => $total,
@@ -48,7 +54,8 @@ class MetastoreTools {
   public function getDataset(string $identifier): array {
     try {
       $dataset = $this->metastore->get('dataset', $identifier);
-      return ['dataset' => json_decode((string) $dataset, TRUE)];
+      $decoded = json_decode((string) $dataset, TRUE);
+      return ['dataset' => self::stripInternalKeys($decoded)];
     }
     catch (\Exception $e) {
       return ['error' => 'Dataset not found: ' . $identifier];
@@ -65,7 +72,8 @@ class MetastoreTools {
       $distributions = [];
 
       if (isset($data->distribution)) {
-        foreach ($data->distribution as $dist) {
+        $refs = $data->{'%Ref:distribution'} ?? [];
+        foreach ($data->distribution as $i => $dist) {
           // Extract the resource identifier from %Ref:downloadURL for
           // use with datastore tools (query_datastore, get_datastore_schema).
           $resourceId = NULL;
@@ -73,8 +81,11 @@ class MetastoreTools {
             $ref = $dist->{'%Ref:downloadURL'}[0]->data;
             $resourceId = ($ref->identifier ?? '') . '__' . ($ref->version ?? '');
           }
+          // Distribution UUIDs are in %Ref:distribution, not in the
+          // embedded distribution objects.
+          $distUuid = isset($refs[$i]) ? ($refs[$i]->identifier ?? NULL) : NULL;
           $distributions[] = [
-            'identifier' => $dist->identifier ?? NULL,
+            'identifier' => $distUuid,
             'resource_id' => $resourceId,
             'title' => $dist->title ?? NULL,
             'mediaType' => $dist->mediaType ?? NULL,
@@ -96,7 +107,8 @@ class MetastoreTools {
   public function getDistribution(string $identifier): array {
     try {
       $distribution = $this->metastore->get('distribution', $identifier);
-      return ['distribution' => json_decode((string) $distribution, TRUE)];
+      $decoded = json_decode((string) $distribution, TRUE);
+      return ['distribution' => self::stripInternalKeys($decoded)];
     }
     catch (\Exception $e) {
       return ['error' => 'Distribution not found: ' . $identifier];
@@ -107,7 +119,7 @@ class MetastoreTools {
    * List available schema IDs.
    */
   public function listSchemas(): array {
-    return ['schemas' => $this->metastore->getSchemas()];
+    return ['schemas' => array_keys($this->metastore->getSchemas())];
   }
 
   /**
@@ -115,7 +127,35 @@ class MetastoreTools {
    */
   public function getCatalog(): array {
     $catalog = $this->metastore->getCatalog();
-    return ['catalog' => json_decode(json_encode($catalog), TRUE)];
+    $data = json_decode(json_encode($catalog), TRUE);
+
+    // Truncate descriptions and strip verbose fields to reduce token usage.
+    if (isset($data['dataset'])) {
+      foreach ($data['dataset'] as &$dataset) {
+        if (isset($dataset['description'])) {
+          $dataset['description'] = mb_substr($dataset['description'], 0, 200);
+        }
+        unset($dataset['spatial']);
+      }
+      unset($dataset);
+    }
+
+    return ['catalog' => $data];
+  }
+
+  /**
+   * Recursively strip all %-prefixed internal keys from decoded JSON data.
+   */
+  private static function stripInternalKeys(array $data): array {
+    foreach ($data as $key => $value) {
+      if (is_string($key) && str_starts_with($key, '%')) {
+        unset($data[$key]);
+      }
+      elseif (is_array($value)) {
+        $data[$key] = self::stripInternalKeys($value);
+      }
+    }
+    return $data;
   }
 
   /**
@@ -125,7 +165,7 @@ class MetastoreTools {
     try {
       $info = $this->datasetInfo->gather($uuid);
       if (isset($info['notice'])) {
-        return ['error' => $info['notice']];
+        return ['error' => $info['notice'] . ': ' . $uuid];
       }
       return ['dataset_info' => $info];
     }

@@ -9,4 +9,6 @@ interface DatabaseTableInterface {
 
   public function getSchema(): array;
 
+  public function getTableName(): string;
+
 }
