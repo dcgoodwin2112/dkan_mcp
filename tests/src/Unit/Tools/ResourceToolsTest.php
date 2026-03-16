@@ -3,6 +3,7 @@
 namespace Drupal\Tests\dkan_mcp\Unit\Tools;
 
 use Drupal\common\DataResource;
+use Drupal\common\DatasetInfo;
 use Drupal\common\Storage\DatabaseTableInterface;
 use Drupal\datastore\DatastoreService;
 use Drupal\dkan_mcp\Tools\ResourceTools;
@@ -17,8 +18,14 @@ class ResourceToolsTest extends TestCase {
     MetastoreService $metastore,
     ResourceMapper $resourceMapper,
     DatastoreService $datastoreService,
+    ?DatasetInfo $datasetInfo = NULL,
   ): ResourceTools {
-    return new ResourceTools($metastore, $resourceMapper, $datastoreService);
+    return new ResourceTools(
+      $metastore,
+      $resourceMapper,
+      $datastoreService,
+      $datasetInfo ?? $this->createMock(DatasetInfo::class),
+    );
   }
 
   protected function createDefaultMocks(): array {
@@ -195,6 +202,54 @@ class ResourceToolsTest extends TestCase {
     $result = $tools->resolveResource('abc123__111');
 
     $this->assertEquals('not_imported', $result['import_status']);
+  }
+
+  public function testResolveIncludesDatasetUuid(): void {
+    [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
+
+    $resourceMapper->method('get')->willReturn(NULL);
+    $datastoreService->method('getStorage')->willThrowException(new \RuntimeException('No storage'));
+    $datastoreService->method('summary')->willThrowException(new \RuntimeException('Not found'));
+
+    // Mock getAll to return one dataset.
+    $datasetJson = json_encode(['identifier' => 'dataset-uuid-1', 'title' => 'Test']);
+    $metastore->method('getAll')->with('dataset')->willReturn([
+      new RootedJsonData($datasetJson),
+    ]);
+
+    // Mock DatasetInfo to return gather() with matching resource_id.
+    $datasetInfo = $this->createMock(DatasetInfo::class);
+    $datasetInfo->method('gather')->with('dataset-uuid-1')->willReturn([
+      'latest_revision' => [
+        'distributions' => [
+          [
+            'distribution_uuid' => 'dist-1',
+            'resource_id' => 'abc123',
+            'resource_version' => '111',
+          ],
+        ],
+      ],
+    ]);
+
+    $tools = $this->createTools($metastore, $resourceMapper, $datastoreService, $datasetInfo);
+    $result = $tools->resolveResource('abc123__111');
+
+    $this->assertEquals('dataset-uuid-1', $result['dataset_uuid']);
+  }
+
+  public function testResolveDatasetUuidNullWhenNotFound(): void {
+    [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
+
+    $resourceMapper->method('get')->willReturn(NULL);
+    $datastoreService->method('getStorage')->willThrowException(new \RuntimeException('No storage'));
+    $datastoreService->method('summary')->willThrowException(new \RuntimeException('Not found'));
+
+    $metastore->method('getAll')->with('dataset')->willReturn([]);
+
+    $tools = $this->createTools($metastore, $resourceMapper, $datastoreService);
+    $result = $tools->resolveResource('abc123__111');
+
+    $this->assertNull($result['dataset_uuid']);
   }
 
   public function testResolveDistributionNoRefDownloadUrl(): void {
