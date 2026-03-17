@@ -4,12 +4,20 @@ Module-level guidance for AI agents using and developing dkan_mcp. For tool refe
 
 ## Tool Workflows
 
+### Site Orientation
+
+`get_site_status` — single call returning dataset/distribution counts, import health, harvest plan count, and DKAN/Drupal versions. Use as the first call when working with a new DKAN site.
+
 ### Data Discovery → Query Validation
 
 1. `list_datasets` — find datasets by title/description
 2. `list_distributions(dataset_id)` — get distributions with `resource_id` field
 3. `get_datastore_schema(resource_id)` — discover column names and types
-4. `query_datastore(resource_id, columns, conditions)` — query with filters
+4. `get_datastore_stats(resource_id)` — per-column null count, distinct count, min, max, total rows (data quality overview)
+5. `query_datastore(resource_id, columns, conditions)` — query with filters
+6. `query_datastore(resource_id, expressions, groupings)` — aggregate with GROUP BY (sum, count, avg, max, min)
+7. `query_datastore_join(resource_id, join_resource_id, join_on, columns)` — join two resources on a shared column
+8. `search_columns(search_term)` — find which resources have columns matching a name or description
 
 Use `search_datasets(keyword)` as an alternative to step 1 when you know a keyword.
 
@@ -37,13 +45,23 @@ The method signatures include parameter names, types, optionality, and return ty
 3. `check_permissions` — validate no orphaned or misconfigured permissions
 4. After adding routes, run `check_permissions` again to catch issues early
 
-### Create Test Data → Import → Query
+### Dataset Lifecycle (Create → Update → Delete)
 
 1. `create_test_dataset(title, download_url)` — create a dataset with a CSV distribution, returns dataset UUID
 2. `list_distributions(dataset_id)` — get the `resource_id` for the new distribution
 3. `import_resource(resource_id)` — trigger datastore import (synchronous for small CSVs)
 4. `get_import_status(resource_id)` — verify import completed
 5. `query_datastore(resource_id)` — query the imported data
+6. `patch_dataset(identifier, '{"title": "New Title"}')` — partial metadata update (JSON Merge Patch)
+7. `update_dataset(identifier, full_metadata_json)` — full metadata replacement (PUT)
+8. `delete_dataset(identifier)` — remove dataset and cascade-delete distributions/datastore tables
+
+### Debugging
+
+1. `get_log_types` — see what types of log entries exist
+2. `get_recent_logs(type, severity)` — filter to relevant entries (e.g., type: "dkan", severity: 3 for errors)
+3. `get_queue_status` — check all DKAN queue depths (import, localization, cleanup)
+4. `get_queue_status(queue_name: "datastore_import")` — check a specific queue after deferred imports
 
 ### Cache and Module Management
 
@@ -82,10 +100,12 @@ Metastore tools use **UUIDs**. Datastore tools use **resource IDs** (`{identifie
 | Tool | Accepts |
 |---|---|
 | `get_dataset`, `list_distributions`, `get_distribution`, `get_dataset_info` | UUID |
-| `query_datastore`, `get_datastore_schema`, `get_import_status`, `import_resource` | `identifier__version` |
+| `query_datastore`, `get_datastore_schema`, `get_datastore_stats`, `get_import_status`, `import_resource` | `identifier__version` |
 | `resolve_resource` | Either format (but see Common Mistakes) |
 | `search_datasets` | keyword string |
 | `create_test_dataset` | `title` + `download_url` |
+| `update_dataset`, `patch_dataset`, `delete_dataset` | UUID |
+| `get_queue_status` | queue name string (optional) |
 | `clear_cache`, `enable_module`, `disable_module` | module name or no args |
 
 To go from a dataset UUID to queryable data: `list_distributions` → use `resource_id` field → pass to datastore tools.
@@ -106,12 +126,54 @@ For `in`/`not in`, value is an array: `{"property": "state", "value": ["CA","TX"
 
 For `between`, value is a two-element array: `{"property": "age", "value": [18, 65], "operator": "between"}`
 
+**Compound conditions (OR logic)**: Use `conditionGroup` objects with `groupOperator: "or"`:
+```json
+[{"groupOperator": "or", "conditions": [
+  {"property": "state", "value": "CA", "operator": "="},
+  {"property": "state", "value": "TX", "operator": "="}
+]}]
+```
+Groups can be nested recursively for complex boolean logic.
+
+### `query_datastore` expressions
+
+- `expressions` — JSON array string: `'[{"operator":"sum","operands":["amount"],"alias":"total"}]'`
+  - **Aggregate operators**: `sum`, `count`, `avg`, `max`, `min` (1 operand, use with `groupings`)
+  - **Arithmetic operators**: `+`, `-`, `*`, `/`, `%` (2 operands, row-level computed columns)
+  - Cannot mix aggregate and arithmetic operators in the same query
+- `groupings` — comma-separated string: `"state,year"` (columns to GROUP BY)
+- All non-aggregated columns must appear in `groupings`
+- Can combine with `columns` (plain columns + expressions in properties)
+- Arithmetic example: `'[{"operator":"+","operands":["col1","col2"],"alias":"total"}]'`
+- Operands can be nested expressions: `["col1", {"operator":"*","operands":["col2","col3"]}]`
+
 ### `query_datastore` other parameters
 
 - `columns` — comma-separated string: `"name,age,state"` (omit for all columns)
 - `sort_direction` — `"asc"` or `"desc"`
 - `limit` — 1–500, default 100
 - `offset` — default 0
+
+### `search_columns` parameters
+
+- `search_term` — Case-insensitive substring match against column names/descriptions.
+- `search_in` — `"name"` (default), `"description"`, or `"both"`.
+- `limit` — Max matches to return, default 100.
+
+### `query_datastore_join` parameters
+
+- `join_on` — Simple: `"state=state_abbreviation"` (primary=joined). JSON: `{"left":"t.col","right":"j.col","operator":"="}`
+- `columns` — Alias-qualified: `"t.state,j.rate"`. Unqualified defaults to primary (`t`).
+- `conditions` — Same as `query_datastore` but supports `"resource":"j"` for joined table filtering. Supports `conditionGroup` for OR logic.
+- `expressions` — Same format as `query_datastore`. Aggregate and arithmetic operators supported.
+- `groupings` — Comma-separated with alias prefix: `"t.state,j.year"`. Required when using aggregate expressions.
+
+### `get_recent_logs` parameters
+
+- `type` — Log type string (e.g., "dkan", "php", "user", "cron").
+- `severity` — Max severity level 0-7. 0=Emergency, 3=Error, 4=Warning, 7=Debug.
+- `limit` — Max entries, default 25, max 100.
+- `offset` — Pagination offset, default 0.
 
 ### Introspection `module` filter
 
@@ -129,9 +191,11 @@ Accepts DKAN module names: `metastore`, `datastore`, `harvest`, `common`, `metas
 | Guessing return type APIs from `get_service_info` | Use `get_class_info` to follow return types — e.g., `getStorage()` returns `DatabaseTable`, call `get_class_info("Drupal\\datastore\\Storage\\DatabaseTable")` to see its methods |
 | Missing setter injection from `get_service_info` | Check the `yaml_definition.calls` field for setter injection methods not visible in the constructor |
 | Using `get_service_info` output without checking `accessCheck()` | If a method signature shows entity queries, the code may need `->accessCheck(TRUE/FALSE)` — `get_service_info` doesn't surface this |
+| Calling get_datastore_schema on every resource to find columns | Use `search_columns` to search all resources in one call |
 | Querying a resource before import completes | Call `get_import_status` first; status must be `done` |
 | Guessing entity types, field names, or bundles | Use `list_entity_types` and `get_entity_fields` to discover them |
 | Guessing plugin IDs or route names | Use `list_plugins` or `get_route_info` to discover them |
+| Asking the user to check Drupal logs manually | Use `get_recent_logs` to read watchdog entries directly |
 
 ## When to Use MCP vs Code Reading
 
@@ -148,10 +212,14 @@ Accepts DKAN module names: `metastore`, `datastore`, `harvest`, `common`, `metas
 | Data structure of methods returning `array` | `get_dataset_info`, `resolve_resource`, `query_datastore` | — |
 | Service YAML definition (setter injection, tags) | `get_service_info` (includes `yaml_definition`) | — |
 | Resource→dataset reverse lookup | `resolve_resource` (includes `dataset_uuid`) | — |
+| Find datasets with specific column types | `search_columns` | — |
+| Cross-dataset correlation | `query_datastore_join` | — |
 | Import/harvest state | `get_import_status`, `get_harvest_runs` | — |
+| Runtime errors, import failures, permission denials | `get_recent_logs` | — |
 | **Drupal** | | |
 | Entity types, bundles, field definitions | `list_entity_types`, `get_entity_fields` | — |
 | Enabled modules and metadata | `list_modules` | — |
+| Site-wide health overview | `get_site_status` | — |
 | Site configuration values | `get_config` | — |
 | Plugin definitions by type | `list_plugins` | — |
 | Route paths, controllers, access | `get_route_info` | — |
@@ -160,6 +228,8 @@ Accepts DKAN module names: `metastore`, `datastore`, `harvest`, `common`, `metas
 | API request/response contracts | — | Read `docs/dkan-api.md` |
 | Workflow sequences (what happens on CRUD) | — | Read `docs/dkan-workflows.md` |
 | Test patterns, mock-chain usage | — | Read `docs/dkan-testing.md` |
+
+For full per-tool parameter schemas and response shapes, see [docs/tools.md](docs/tools.md).
 
 ## Module Development
 
