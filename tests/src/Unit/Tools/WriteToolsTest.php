@@ -6,6 +6,9 @@ use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Extension\ModuleInstallerInterface;
 use Drupal\datastore\DatastoreService;
 use Drupal\dkan_mcp\Tools\WriteTools;
+use Drupal\metastore\Exception\CannotChangeUuidException;
+use Drupal\metastore\Exception\MissingObjectException;
+use Drupal\metastore\Exception\UnmodifiedObjectException;
 use Drupal\metastore\MetastoreService;
 use PHPUnit\Framework\TestCase;
 
@@ -200,6 +203,146 @@ class WriteToolsTest extends TestCase {
     $result = $tools->importResource('bad__id');
 
     $this->assertArrayHasKey('error', $result);
+  }
+
+  public function testUpdateDatasetSuccess(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->once())
+      ->method('put')
+      ->willReturn(['identifier' => 'test-uuid', 'new' => FALSE]);
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->updateDataset('test-uuid', '{"title":"Updated"}');
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertEquals('test-uuid', $result['identifier']);
+    $this->assertFalse($result['new']);
+  }
+
+  public function testUpdateDatasetCreatesNew(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('put')
+      ->willReturn(['identifier' => 'new-uuid', 'new' => TRUE]);
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->updateDataset('new-uuid', '{"title":"New Dataset"}');
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertTrue($result['new']);
+  }
+
+  public function testUpdateDatasetUnmodified(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('put')
+      ->willThrowException(new UnmodifiedObjectException('No changes'));
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->updateDataset('test-uuid', '{"title":"Same"}');
+
+    $this->assertEquals('unmodified', $result['status']);
+    $this->assertEquals('test-uuid', $result['identifier']);
+  }
+
+  public function testUpdateDatasetCannotChangeUuid(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('put')
+      ->willThrowException(new CannotChangeUuidException('UUID mismatch'));
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->updateDataset('test-uuid', '{"identifier":"different-uuid"}');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('UUID mismatch', $result['error']);
+  }
+
+  public function testUpdateDatasetInvalidJson(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->never())->method('put');
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->updateDataset('test-uuid', '{invalid json}');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Invalid JSON', $result['error']);
+  }
+
+  public function testUpdateDatasetNonObjectJson(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->never())->method('put');
+
+    $tools = $this->createTools(metastore: $metastore);
+
+    $result = $tools->updateDataset('test-uuid', '"just a string"');
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('JSON object', $result['error']);
+
+    $result2 = $tools->updateDataset('test-uuid', '[1,2,3]');
+    $this->assertArrayHasKey('error', $result2);
+    $this->assertStringContainsString('JSON object', $result2['error']);
+  }
+
+  public function testPatchDatasetNonObjectJson(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->never())->method('patch');
+
+    $tools = $this->createTools(metastore: $metastore);
+
+    $result = $tools->patchDataset('test-uuid', '[1,2,3]');
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('JSON object', $result['error']);
+  }
+
+  public function testPatchDatasetSuccess(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->once())
+      ->method('patch')
+      ->with('dataset', 'test-uuid', '{"title":"Patched"}')
+      ->willReturn('test-uuid');
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->patchDataset('test-uuid', '{"title":"Patched"}');
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertEquals('test-uuid', $result['identifier']);
+  }
+
+  public function testPatchDatasetNotFound(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('patch')
+      ->willThrowException(new MissingObjectException('Not found'));
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->patchDataset('missing-uuid', '{"title":"Patched"}');
+
+    $this->assertEquals('not_found', $result['status']);
+    $this->assertEquals('missing-uuid', $result['identifier']);
+  }
+
+  public function testDeleteDatasetSuccess(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->once())
+      ->method('delete')
+      ->with('dataset', 'test-uuid')
+      ->willReturn('test-uuid');
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->deleteDataset('test-uuid');
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertEquals('test-uuid', $result['identifier']);
+    $this->assertStringContainsString('cascade', $result['message']);
+  }
+
+  public function testDeleteDatasetNotFound(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('delete')
+      ->willThrowException(new MissingObjectException('Not found'));
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->deleteDataset('missing-uuid');
+
+    $this->assertEquals('not_found', $result['status']);
+    $this->assertEquals('missing-uuid', $result['identifier']);
   }
 
 }

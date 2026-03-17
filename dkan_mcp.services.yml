@@ -12,6 +12,8 @@ services:
       - '@dkan_mcp.tools.resource'
       - '@dkan_mcp.tools.write'
       - '@dkan_mcp.tools.drupal'
+      - '@dkan_mcp.tools.status'
+      - '@dkan_mcp.tools.log'
 
   dkan_mcp.tools.metastore:
     class: Drupal\dkan_mcp\Tools\MetastoreTools
@@ -24,6 +26,9 @@ services:
     arguments:
       - '@dkan.datastore.service'
       - '@dkan.datastore.query'
+      - '@dkan.metastore.service'
+      - '@dkan.common.dataset_info'
+      - '@database'
 
   dkan_mcp.tools.search:
     class: Drupal\dkan_mcp\Tools\SearchTools
@@ -75,6 +80,22 @@ services:
       - '@config.factory'
       - '@router.route_provider'
       - '@service_container'
+
+  dkan_mcp.tools.status:
+    class: Drupal\dkan_mcp\Tools\StatusTools
+    arguments:
+      - '@dkan.metastore.service'
+      - '@dkan.common.dataset_info'
+      - '@dkan.harvest.service'
+      - '@module_handler'
+      - '@extension.list.module'
+      - '@queue'
+      - '@plugin.manager.queue_worker'
+
+  dkan_mcp.tools.log:
+    class: Drupal\dkan_mcp\Tools\LogTools
+    arguments:
+      - '@database'
 
   dkan_mcp.tools.write:
     class: Drupal\dkan_mcp\Tools\WriteTools
