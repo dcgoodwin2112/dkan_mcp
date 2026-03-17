@@ -50,4 +50,16 @@ class MetastoreService {
     return TRUE;
   }
 
+  public function put(string $schema_id, string $identifier, RootedJsonData $data): array {
+    return ['identifier' => $identifier, 'new' => FALSE];
+  }
+
+  public function patch(string $schema_id, string $identifier, mixed $json_data): string {
+    return $identifier;
+  }
+
+  public function delete(string $schema_id, string $identifier): string {
+    return $identifier;
+  }
+
 }
