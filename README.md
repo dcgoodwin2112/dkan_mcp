@@ -1,6 +1,6 @@
 # DKAN MCP
 
-MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 35 tools: 30 read-only for discovery and querying, 5 write tools for cache management, module operations, and test data creation.
+MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 45 tools: 37 read-only for discovery and querying, 8 write tools for cache management, module operations, dataset CRUD, and imports.
 
 ## Why This Module Exists
 
@@ -119,6 +119,8 @@ drush dkan-mcp:serve
 
 ## Tools
 
+For full per-tool parameter schemas, response shapes, and behavioral notes, see [docs/tools.md](docs/tools.md).
+
 Tools are organized by platform scope:
 
 - **DKAN tools** (Metastore, Datastore, Search, Harvest, DKAN Introspection): Require DKAN modules, operate on DKAN's data model and services.
@@ -141,8 +143,11 @@ Tools are organized by platform scope:
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `query_datastore` | `resource_id`, `columns?`, `conditions?`, `sort_field?`, `sort_direction?`, `limit?`, `offset?` | Query with filters, sorting, pagination |
+| `query_datastore` | `resource_id`, `columns?`, `conditions?`, `sort_field?`, `sort_direction?`, `limit?`, `offset?`, `expressions?`, `groupings?` | Query with filters, sorting, pagination, aggregation (sum, count, avg, max, min with GROUP BY) |
+| `query_datastore_join` | `resource_id`, `join_resource_id`, `join_on`, `columns?`, `conditions?`, `sort_field?`, `sort_direction?`, `limit?`, `offset?` | Join two resources on a shared column |
 | `get_datastore_schema` | `resource_id` | Column names and types |
+| `search_columns` | `search_term`, `search_in?`, `limit?` | Search column names/descriptions across all imported resources |
+| `get_datastore_stats` | `resource_id`, `columns?` | Per-column statistics: null count, distinct count, min, max, total rows |
 | `get_import_status` | `resource_id` | Import/processing status |
 
 ### Search
@@ -183,6 +188,23 @@ Tools are organized by platform scope:
 | `disable_module` | `module_name` | Uninstall a Drupal module |
 | `create_test_dataset` | `title`, `download_url` | Create a minimal dataset with one CSV distribution |
 | `import_resource` | `resource_id`, `deferred?` | Trigger datastore import for a resource |
+| `update_dataset` | `identifier`, `metadata` | Full replacement of dataset metadata (PUT semantics) |
+| `patch_dataset` | `identifier`, `metadata` | Partial update via JSON Merge Patch (RFC 7396) |
+| `delete_dataset` | `identifier` | Delete a dataset and cascade-delete distributions and datastore tables |
+
+### Status
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `get_site_status` | — | Site health overview: dataset/distribution counts, import status, harvest plans, DKAN/Drupal versions |
+| `get_queue_status` | `queue_name?` | Queue item counts for DKAN queues (import, localization, cleanup) |
+
+### Log
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `get_recent_logs` | `type?`, `severity?`, `limit?`, `offset?` | Recent watchdog log entries with optional filters |
+| `get_log_types` | — | Distinct log types with entry counts |
 
 ### Drupal
 
@@ -204,7 +226,7 @@ Datastore tools use **resource IDs** in the format `{identifier}__{version}` (e.
 ## Architecture
 
 - **Entry point**: `McpServeCommand` (Drush command) → `McpServerFactory` → `Mcp\Server` (stdio)
-- **Tool classes**: `MetastoreTools`, `DatastoreTools`, `SearchTools`, `HarvestTools`, `ServiceTools`, `EventTools`, `PermissionTools`, `ResourceTools`, `WriteTools`, `DrupalTools` — Drupal services with injected DKAN dependencies
+- **Tool classes**: `MetastoreTools`, `DatastoreTools`, `SearchTools`, `HarvestTools`, `ServiceTools`, `EventTools`, `PermissionTools`, `ResourceTools`, `WriteTools`, `DrupalTools`, `StatusTools`, `LogTools` — Drupal services with injected DKAN dependencies
 - **opis/json-schema conflict**: DKAN requires opis v1, the MCP SDK requires v2. The SDK is installed in `dkan_mcp/vendor/` (not site-level). `SchemaValidatorShim` replaces the SDK's opis-dependent validator. The `post-install-cleanup` script removes opis packages from module vendor to prevent autoloader collisions.
 
 ## Development

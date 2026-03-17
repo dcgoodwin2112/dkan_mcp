@@ -3,9 +3,7 @@
   "description": "MCP server for DKAN.",
   "type": "drupal-custom-module",
   "license": "GPL-2.0-or-later",
-  "require": {
-    "mcp/sdk": "^0.4"
-  },
+  "require": {},
   "suggest": {
     "mcp/sdk": "^0.4 - Required at runtime. Install in module vendor: cd dkan_mcp && composer require mcp/sdk:^0.4 && composer run-script post-install-cleanup"
   },

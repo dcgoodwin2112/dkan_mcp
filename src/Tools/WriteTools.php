@@ -7,6 +7,9 @@ use Drupal\Core\Cache\Cache;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Extension\ModuleInstallerInterface;
 use Drupal\datastore\DatastoreService;
+use Drupal\metastore\Exception\CannotChangeUuidException;
+use Drupal\metastore\Exception\MissingObjectException;
+use Drupal\metastore\Exception\UnmodifiedObjectException;
 use Drupal\metastore\MetastoreService;
 use RootedData\RootedJsonData;
 
@@ -148,6 +151,95 @@ class WriteTools {
         'message' => $deferred
           ? 'Import queued. Use get_import_status to check progress.'
           : ($hasError ? 'Import completed with errors.' : 'Import completed. Use get_import_status to verify.'),
+      ];
+    }
+    catch (\Throwable $e) {
+      return ['error' => $e->getMessage()];
+    }
+  }
+
+  /**
+   * Full replacement of dataset metadata (PUT semantics).
+   */
+  public function updateDataset(string $identifier, string $metadata): array {
+    if (!is_object(json_decode($metadata))) {
+      $message = json_last_error() !== JSON_ERROR_NONE
+        ? 'Invalid JSON: ' . json_last_error_msg()
+        : 'Metadata must be a JSON object, not a scalar or array.';
+      return ['error' => $message];
+    }
+
+    try {
+      $result = $this->metastoreService->put('dataset', $identifier, new RootedJsonData($metadata));
+      return [
+        'status' => 'success',
+        'identifier' => $result['identifier'],
+        'new' => $result['new'] ?? FALSE,
+      ];
+    }
+    catch (CannotChangeUuidException $e) {
+      return ['error' => $e->getMessage()];
+    }
+    catch (UnmodifiedObjectException $e) {
+      return [
+        'status' => 'unmodified',
+        'identifier' => $identifier,
+        'message' => 'No changes detected in the provided metadata.',
+      ];
+    }
+    catch (\Throwable $e) {
+      return ['error' => $e->getMessage()];
+    }
+  }
+
+  /**
+   * Partial update via JSON Merge Patch (RFC 7396).
+   */
+  public function patchDataset(string $identifier, string $metadata): array {
+    if (!is_object(json_decode($metadata))) {
+      $message = json_last_error() !== JSON_ERROR_NONE
+        ? 'Invalid JSON: ' . json_last_error_msg()
+        : 'Metadata must be a JSON object, not a scalar or array.';
+      return ['error' => $message];
+    }
+
+    try {
+      $this->metastoreService->patch('dataset', $identifier, $metadata);
+      return [
+        'status' => 'success',
+        'identifier' => $identifier,
+        'message' => 'Dataset patched successfully.',
+      ];
+    }
+    catch (MissingObjectException $e) {
+      return [
+        'status' => 'not_found',
+        'identifier' => $identifier,
+        'message' => "Dataset '{$identifier}' not found.",
+      ];
+    }
+    catch (\Throwable $e) {
+      return ['error' => $e->getMessage()];
+    }
+  }
+
+  /**
+   * Remove a dataset and cascade-delete distributions and datastore tables.
+   */
+  public function deleteDataset(string $identifier): array {
+    try {
+      $this->metastoreService->delete('dataset', $identifier);
+      return [
+        'status' => 'success',
+        'identifier' => $identifier,
+        'message' => 'Dataset deleted. Associated distributions and datastore tables have been cascade-deleted.',
+      ];
+    }
+    catch (MissingObjectException $e) {
+      return [
+        'status' => 'not_found',
+        'identifier' => $identifier,
+        'message' => "Dataset '{$identifier}' not found.",
       ];
     }
     catch (\Throwable $e) {

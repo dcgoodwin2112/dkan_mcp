@@ -11,6 +11,8 @@ use Drupal\dkan_mcp\Tools\ResourceTools;
 use Drupal\dkan_mcp\Tools\SearchTools;
 use Drupal\dkan_mcp\Tools\ServiceTools;
 use Drupal\dkan_mcp\Tools\DrupalTools;
+use Drupal\dkan_mcp\Tools\StatusTools;
+use Drupal\dkan_mcp\Tools\LogTools;
 use Drupal\dkan_mcp\Tools\WriteTools;
 use Mcp\Schema\ToolAnnotations;
 use Mcp\Server;
@@ -31,6 +33,8 @@ class McpServerFactory {
     protected ResourceTools $resourceTools,
     protected WriteTools $writeTools,
     protected DrupalTools $drupalTools,
+    protected StatusTools $statusTools,
+    protected LogTools $logTools,
   ) {}
 
   public function create(): Server {
@@ -47,6 +51,8 @@ class McpServerFactory {
     $this->registerResourceTools($builder);
     $this->registerWriteTools($builder);
     $this->registerDrupalTools($builder);
+    $this->registerStatusTools($builder);
+    $this->registerLogTools($builder);
 
     return $builder->build();
   }
@@ -153,11 +159,13 @@ class McpServerFactory {
         string $sort_direction = 'asc',
         int $limit = 100,
         int $offset = 0,
+        ?string $expressions = NULL,
+        ?string $groupings = NULL,
       ) => $this->datastoreTools->queryDatastore(
-        $resource_id, $columns, $conditions, $sort_field, $sort_direction, $limit, $offset,
+        $resource_id, $columns, $conditions, $sort_field, $sort_direction, $limit, $offset, $expressions, $groupings,
       ),
       name: 'query_datastore',
-      description: 'Query a datastore resource table with optional filters, sorting, and pagination. Use get_datastore_schema first to discover available columns.',
+      description: 'Query a datastore resource table with optional filters, sorting, pagination, aggregation (sum, count, avg, max, min with GROUP BY), and arithmetic expressions (+, -, *, /, %). Use get_datastore_schema first to discover available columns.',
       annotations: $readOnly,
       inputSchema: [
         'type' => 'object',
@@ -167,13 +175,84 @@ class McpServerFactory {
             'description' => 'Resource ID in identifier__version format (from list_distributions)',
           ],
           'columns' => ['type' => 'string', 'description' => 'Comma-separated column names to return (omit for all)'],
-          'conditions' => ['type' => 'string', 'description' => 'JSON array of condition objects: [{"property":"col","value":"val","operator":"="}]. Operators: =, <>, <, <=, >, >=, like, contains, starts with, in, not in, between'],
+          'conditions' => ['type' => 'string', 'description' => 'JSON array of condition objects: [{"property":"col","value":"val","operator":"="}]. Operators: =, <>, <, <=, >, >=, like, contains, starts with, in, not in, between. Supports conditionGroup for OR logic: [{"groupOperator":"or","conditions":[...]}]'],
           'sort_field' => ['type' => 'string', 'description' => 'Column name to sort by'],
           'sort_direction' => ['type' => 'string', 'enum' => ['asc', 'desc'], 'default' => 'asc'],
           'limit' => ['type' => 'integer', 'description' => 'Max rows to return (1-500)', 'default' => 100],
           'offset' => ['type' => 'integer', 'description' => 'Number of rows to skip', 'default' => 0],
+          'expressions' => [
+            'type' => 'string',
+            'description' => 'JSON array of expressions: [{"operator":"sum","operands":["column"],"alias":"total"}]. Aggregate operators: sum, count, avg, max, min (1 operand, use with groupings). Arithmetic operators: +, -, *, /, % (2 operands, row-level computed columns). Cannot mix aggregate and arithmetic in one query.',
+          ],
+          'groupings' => [
+            'type' => 'string',
+            'description' => 'Comma-separated column names to GROUP BY. Required when using aggregate expressions. All non-aggregated columns must be listed here.',
+          ],
         ],
         'required' => ['resource_id'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(
+        string $resource_id,
+        string $join_resource_id,
+        string $join_on,
+        ?string $columns = NULL,
+        ?string $conditions = NULL,
+        ?string $sort_field = NULL,
+        string $sort_direction = 'asc',
+        int $limit = 100,
+        int $offset = 0,
+        ?string $expressions = NULL,
+        ?string $groupings = NULL,
+      ) => $this->datastoreTools->queryDatastoreJoin(
+        $resource_id, $join_resource_id, $join_on, $columns, $conditions,
+        $sort_field, $sort_direction, $limit, $offset, $expressions, $groupings,
+      ),
+      name: 'query_datastore_join',
+      description: 'Join and query two datastore resources with optional aggregation. Use get_datastore_schema on both resources first to discover columns. Primary resource is aliased as "t", joined resource as "j". Qualify columns with alias prefix (e.g., "t.state,j.smoking_rate").',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'resource_id' => [
+            'type' => 'string',
+            'description' => 'Primary resource ID (identifier__version format)',
+          ],
+          'join_resource_id' => [
+            'type' => 'string',
+            'description' => 'Resource ID to join with (identifier__version format)',
+          ],
+          'join_on' => [
+            'type' => 'string',
+            'description' => 'Join condition. Simple: "state=state_abbreviation" (primary_col=join_col). JSON for non-equality: {"left":"t.col","right":"j.col","operator":"="}',
+          ],
+          'columns' => [
+            'type' => 'string',
+            'description' => 'Comma-separated columns with optional alias prefix: "t.state,j.rate". Unqualified columns default to primary resource (t). Omit for all columns.',
+          ],
+          'conditions' => [
+            'type' => 'string',
+            'description' => 'JSON array of conditions. Add "resource":"j" to filter on joined table: [{"resource":"j","property":"col","value":"val","operator":"="}]. Supports conditionGroup for OR logic.',
+          ],
+          'sort_field' => [
+            'type' => 'string',
+            'description' => 'Column to sort by, with optional alias prefix (e.g., "j.rate")',
+          ],
+          'sort_direction' => ['type' => 'string', 'enum' => ['asc', 'desc'], 'default' => 'asc'],
+          'limit' => ['type' => 'integer', 'description' => 'Max rows (1-500)', 'default' => 100],
+          'offset' => ['type' => 'integer', 'description' => 'Rows to skip', 'default' => 0],
+          'expressions' => [
+            'type' => 'string',
+            'description' => 'JSON array of expressions (same format as query_datastore). Aggregate operators: sum, count, avg, max, min. Arithmetic: +, -, *, /, %. Cannot mix types.',
+          ],
+          'groupings' => [
+            'type' => 'string',
+            'description' => 'Comma-separated GROUP BY columns with optional alias prefix (e.g., "t.state,j.year"). Required when using aggregate expressions.',
+          ],
+        ],
+        'required' => ['resource_id', 'join_resource_id', 'join_on'],
       ],
     );
 
@@ -189,6 +268,53 @@ class McpServerFactory {
             'type' => 'string',
             'description' => 'Resource ID in identifier__version format (from list_distributions)',
           ],
+        ],
+        'required' => ['resource_id'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(
+        string $search_term,
+        string $search_in = 'name',
+        int $limit = 100,
+      ) => $this->datastoreTools->searchColumns($search_term, $search_in, $limit),
+      name: 'search_columns',
+      description: 'Search column names and descriptions across all imported datastore resources. Use to find which datasets contain specific types of data (e.g., "state", "price", "date") before querying or joining.',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'search_term' => [
+            'type' => 'string',
+            'description' => 'Column name or description substring to search (case-insensitive)',
+          ],
+          'search_in' => [
+            'type' => 'string',
+            'enum' => ['name', 'description', 'both'],
+            'description' => 'Where to search: column names, descriptions, or both',
+            'default' => 'name',
+          ],
+          'limit' => [
+            'type' => 'integer',
+            'description' => 'Max matches to return (default 100)',
+            'default' => 100,
+          ],
+        ],
+        'required' => ['search_term'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $resource_id, ?string $columns = NULL) => $this->datastoreTools->getDatastoreStats($resource_id, $columns),
+      name: 'get_datastore_stats',
+      description: 'Get per-column statistics for a datastore resource: null count, distinct count, min, max, and total row count. Use to understand data quality and distribution before querying. Note: DKAN stores CSV data as text, so min/max use lexicographic ordering (e.g., "9" > "10000"). For true numeric min/max, use query_datastore with min/max expressions.',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'resource_id' => ['type' => 'string', 'description' => 'Resource ID in identifier__version format'],
+          'columns' => ['type' => 'string', 'description' => 'Comma-separated column names to analyze. Omit for all columns.'],
         ],
         'required' => ['resource_id'],
       ],
@@ -491,6 +617,75 @@ class McpServerFactory {
         'required' => ['resource_id'],
       ],
     );
+
+    $builder->addTool(
+      handler: fn(string $identifier, string $metadata) => $this->writeTools->updateDataset($identifier, $metadata),
+      name: 'update_dataset',
+      description: 'Full replacement of dataset metadata (PUT semantics). Can upsert — creates the dataset if it does not exist. The metadata must be a complete dataset object as a JSON string. Returns {status, identifier, new} where "new" indicates whether a new dataset was created.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'identifier' => ['type' => 'string', 'description' => 'Dataset UUID'],
+          'metadata' => ['type' => 'string', 'description' => 'Complete dataset metadata as a JSON string'],
+        ],
+        'required' => ['identifier', 'metadata'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $identifier, string $metadata) => $this->writeTools->patchDataset($identifier, $metadata),
+      name: 'patch_dataset',
+      description: 'Partial update of dataset metadata using JSON Merge Patch (RFC 7396). Send only the fields you want to change as a JSON object (e.g., {"title": "New Title"}). Fields not included are left unchanged.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'identifier' => ['type' => 'string', 'description' => 'Dataset UUID'],
+          'metadata' => ['type' => 'string', 'description' => 'JSON object with only the fields to change'],
+        ],
+        'required' => ['identifier', 'metadata'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $identifier) => $this->writeTools->deleteDataset($identifier),
+      name: 'delete_dataset',
+      description: 'Delete a dataset and cascade-delete its distributions and datastore tables. This is destructive and cannot be undone.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'identifier' => ['type' => 'string', 'description' => 'Dataset UUID'],
+        ],
+        'required' => ['identifier'],
+      ],
+    );
+  }
+
+  protected function registerStatusTools(Server\Builder $builder): void {
+    $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
+
+    $builder->addTool(
+      handler: fn() => $this->statusTools->getSiteStatus(),
+      name: 'get_site_status',
+      description: 'Get a high-level overview of the DKAN site: dataset and distribution counts (by format), import status summary (done/pending/error), harvest plan count, DKAN module versions, and Drupal version. Use this to orient on a new site before deeper exploration.',
+      annotations: $readOnly,
+      inputSchema: ['type' => 'object', 'properties' => new \stdClass()],
+    );
+
+    $builder->addTool(
+      handler: fn(?string $queue_name = NULL) => $this->statusTools->getQueueStatus($queue_name),
+      name: 'get_queue_status',
+      description: 'Get queue item counts for DKAN queues. Shows how many items are waiting for processing in import, localization, and cleanup queues. Use when imports seem stuck or after triggering deferred imports.',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'queue_name' => ['type' => 'string', 'description' => 'Specific queue name (e.g. datastore_import). Omit for all DKAN queues.'],
+        ],
+      ],
+    );
   }
 
   protected function registerDrupalTools(Server\Builder $builder): void {
@@ -577,6 +772,39 @@ class McpServerFactory {
           'path' => ['type' => 'string', 'description' => 'Path pattern to search (e.g. /api/1/)'],
         ],
       ],
+    );
+  }
+
+  protected function registerLogTools(Server\Builder $builder): void {
+    $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
+
+    $builder->addTool(
+      handler: fn(
+        ?string $type = NULL,
+        ?int $severity = NULL,
+        int $limit = 25,
+        int $offset = 0,
+      ) => $this->logTools->getRecentLogs($type, $severity, $limit, $offset),
+      name: 'get_recent_logs',
+      description: 'Get recent watchdog log entries with optional filters. Use to diagnose import failures, permission denials, and runtime errors without leaving the conversation.',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'type' => ['type' => 'string', 'description' => 'Filter by log type (e.g. "dkan", "php", "user", "cron")'],
+          'severity' => ['type' => 'integer', 'description' => 'Max severity level 0-7. 0=Emergency, 3=Error, 4=Warning, 7=Debug. Returns entries at this level and above (more severe).'],
+          'limit' => ['type' => 'integer', 'description' => 'Max entries to return (1-100)', 'default' => 25],
+          'offset' => ['type' => 'integer', 'description' => 'Pagination offset', 'default' => 0],
+        ],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn() => $this->logTools->getLogTypes(),
+      name: 'get_log_types',
+      description: 'List distinct watchdog log types with entry counts. Use to discover what types of log entries exist before filtering with get_recent_logs.',
+      annotations: $readOnly,
+      inputSchema: ['type' => 'object', 'properties' => new \stdClass()],
     );
   }
 
