@@ -248,6 +248,72 @@ class WriteTools {
   }
 
   /**
+   * Publish a dataset to make it publicly visible.
+   */
+  public function publishDataset(string $identifier): array {
+    try {
+      $this->metastoreService->publish('dataset', $identifier);
+      return [
+        'status' => 'success',
+        'identifier' => $identifier,
+        'message' => 'Dataset published.',
+      ];
+    }
+    catch (MissingObjectException $e) {
+      return [
+        'status' => 'not_found',
+        'identifier' => $identifier,
+        'message' => "Dataset '{$identifier}' not found.",
+      ];
+    }
+    catch (\Throwable $e) {
+      return ['error' => $e->getMessage()];
+    }
+  }
+
+  /**
+   * Archive (unpublish) a dataset.
+   */
+  public function unpublishDataset(string $identifier): array {
+    try {
+      $this->metastoreService->archive('dataset', $identifier);
+      return [
+        'status' => 'success',
+        'identifier' => $identifier,
+        'message' => 'Dataset unpublished (archived).',
+      ];
+    }
+    catch (MissingObjectException $e) {
+      return [
+        'status' => 'not_found',
+        'identifier' => $identifier,
+        'message' => "Dataset '{$identifier}' not found.",
+      ];
+    }
+    catch (\Throwable $e) {
+      return ['error' => $e->getMessage()];
+    }
+  }
+
+  /**
+   * Drop a datastore table for a resource.
+   */
+  public function dropDatastore(string $resourceId): array {
+    try {
+      [$identifier, $version] = $this->parseResourceId($resourceId);
+      $this->datastoreService->drop($identifier, $version);
+      return [
+        'status' => 'success',
+        'resource_id' => $resourceId,
+        'message' => 'Datastore table dropped.',
+      ];
+    }
+    catch (\Throwable $e) {
+      return ['error' => $e->getMessage()];
+    }
+  }
+
+  /**
    * Parse a resource_id into [identifier, version].
    *
    * @return array{string, string|null}

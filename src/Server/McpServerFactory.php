@@ -16,6 +16,7 @@ use Drupal\dkan_mcp\Tools\LogTools;
 use Drupal\dkan_mcp\Tools\WriteTools;
 use Mcp\Schema\ToolAnnotations;
 use Mcp\Server;
+use Mcp\Server\Builder;
 
 /**
  * Builds a configured MCP Server with all DKAN tools registered.
@@ -37,6 +38,9 @@ class McpServerFactory {
     protected LogTools $logTools,
   ) {}
 
+  /**
+   * Create a configured MCP Server with all tools registered.
+   */
   public function create(): Server {
     $builder = Server::builder()
       ->setServerInfo('dkan', '1.0.0');
@@ -57,7 +61,10 @@ class McpServerFactory {
     return $builder->build();
   }
 
-  protected function registerMetastoreTools(Server\Builder $builder): void {
+  /**
+   * Register metastore tools.
+   */
+  protected function registerMetastoreTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -133,6 +140,20 @@ class McpServerFactory {
     );
 
     $builder->addTool(
+      handler: fn(string $schema_id) => $this->metastoreTools->getSchema($schema_id),
+      name: 'get_schema',
+      description: 'Get a JSON Schema definition by schema ID (e.g. dataset, distribution, keyword). Use list_schemas to discover available IDs.',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'schema_id' => ['type' => 'string', 'description' => 'Schema ID (e.g. dataset, distribution, keyword)'],
+        ],
+        'required' => ['schema_id'],
+      ],
+    );
+
+    $builder->addTool(
       handler: fn(string $uuid) => $this->metastoreTools->getDatasetInfo($uuid),
       name: 'get_dataset_info',
       description: 'Get aggregated dataset info including all distribution details. Returns latest_revision.distributions[] with keys: distribution_uuid, resource_id, resource_version, mime_type, source_path, importer_status ("waiting"|"done"|"error"), importer_percent_done, importer_error, table_name, fetcher_status, fetcher_percent_done, file_path. Use this to discover the actual data structure of DatasetInfo::gather().',
@@ -147,7 +168,10 @@ class McpServerFactory {
     );
   }
 
-  protected function registerDatastoreTools(Server\Builder $builder): void {
+  /**
+   * Register datastore tools.
+   */
+  protected function registerDatastoreTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -175,7 +199,10 @@ class McpServerFactory {
             'description' => 'Resource ID in identifier__version format (from list_distributions)',
           ],
           'columns' => ['type' => 'string', 'description' => 'Comma-separated column names to return (omit for all)'],
-          'conditions' => ['type' => 'string', 'description' => 'JSON array of condition objects: [{"property":"col","value":"val","operator":"="}]. Operators: =, <>, <, <=, >, >=, like, contains, starts with, in, not in, between. Supports conditionGroup for OR logic: [{"groupOperator":"or","conditions":[...]}]'],
+          'conditions' => [
+            'type' => 'string',
+            'description' => 'JSON array of condition objects: [{"property":"col","value":"val","operator":"="}]. Operators: =, <>, <, <=, >, >=, like, contains, starts with, in, not in, between. Supports conditionGroup for OR logic: [{"groupOperator":"or","conditions":[...]}]',
+          ],
           'sort_field' => ['type' => 'string', 'description' => 'Column name to sort by'],
           'sort_direction' => ['type' => 'string', 'enum' => ['asc', 'desc'], 'default' => 'asc'],
           'limit' => ['type' => 'integer', 'description' => 'Max rows to return (1-500)', 'default' => 100],
@@ -314,7 +341,10 @@ class McpServerFactory {
         'type' => 'object',
         'properties' => [
           'resource_id' => ['type' => 'string', 'description' => 'Resource ID in identifier__version format'],
-          'columns' => ['type' => 'string', 'description' => 'Comma-separated column names to analyze. Omit for all columns.'],
+          'columns' => [
+            'type' => 'string',
+            'description' => 'Comma-separated column names to analyze. Omit for all columns.',
+          ],
         ],
         'required' => ['resource_id'],
       ],
@@ -338,7 +368,10 @@ class McpServerFactory {
     );
   }
 
-  protected function registerSearchTools(Server\Builder $builder): void {
+  /**
+   * Register search tools.
+   */
+  protected function registerSearchTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -358,7 +391,10 @@ class McpServerFactory {
     );
   }
 
-  protected function registerHarvestTools(Server\Builder $builder): void {
+  /**
+   * Register harvest tools.
+   */
+  protected function registerHarvestTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -411,9 +447,59 @@ class McpServerFactory {
         'required' => ['plan_id'],
       ],
     );
+
+    $write = new ToolAnnotations(readOnlyHint: FALSE);
+
+    $builder->addTool(
+      handler: fn(string $plan) => $this->harvestTools->registerHarvest($plan),
+      name: 'register_harvest',
+      description: 'Register a new harvest plan. The plan JSON must include identifier, extract (type + uri), and load properties.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'plan' => [
+            'type' => 'string',
+            'description' => 'Harvest plan as a JSON string with identifier, extract, and load properties',
+          ],
+        ],
+        'required' => ['plan'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $plan_id) => $this->harvestTools->runHarvest($plan_id),
+      name: 'run_harvest',
+      description: 'Execute a harvest run for a registered plan. Fetches data from the source and creates/updates datasets.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'plan_id' => ['type' => 'string', 'description' => 'Harvest plan ID'],
+        ],
+        'required' => ['plan_id'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $plan_id) => $this->harvestTools->deregisterHarvest($plan_id),
+      name: 'deregister_harvest',
+      description: 'Remove a registered harvest plan. Does not delete datasets that were previously harvested.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'plan_id' => ['type' => 'string', 'description' => 'Harvest plan ID'],
+        ],
+        'required' => ['plan_id'],
+      ],
+    );
   }
 
-  protected function registerEventTools(Server\Builder $builder): void {
+  /**
+   * Register event tools.
+   */
+  protected function registerEventTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -424,7 +510,10 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'module' => ['type' => 'string', 'description' => 'Module name to filter (e.g. metastore, datastore). Omit for all DKAN events.'],
+          'module' => [
+            'type' => 'string',
+            'description' => 'Module name to filter (e.g. metastore, datastore). Omit for all DKAN events.',
+          ],
         ],
       ],
     );
@@ -437,14 +526,20 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'event_name' => ['type' => 'string', 'description' => 'Event name string (e.g. dkan_metastore_dataset_update)'],
+          'event_name' => [
+            'type' => 'string',
+            'description' => 'Event name string (e.g. dkan_metastore_dataset_update)',
+          ],
         ],
         'required' => ['event_name'],
       ],
     );
   }
 
-  protected function registerResourceTools(Server\Builder $builder): void {
+  /**
+   * Register resource tools.
+   */
+  protected function registerResourceTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -455,14 +550,20 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'id' => ['type' => 'string', 'description' => 'Distribution UUID or resource_id in identifier__version format'],
+          'id' => [
+            'type' => 'string',
+            'description' => 'Distribution UUID or resource_id in identifier__version format',
+          ],
         ],
         'required' => ['id'],
       ],
     );
   }
 
-  protected function registerPermissionTools(Server\Builder $builder): void {
+  /**
+   * Register permission tools.
+   */
+  protected function registerPermissionTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -473,7 +574,10 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'module' => ['type' => 'string', 'description' => 'Module name to filter (e.g. harvest, datastore, metastore). Omit for all DKAN permissions.'],
+          'module' => [
+            'type' => 'string',
+            'description' => 'Module name to filter (e.g. harvest, datastore, metastore). Omit for all DKAN permissions.',
+          ],
         ],
       ],
     );
@@ -501,7 +605,10 @@ class McpServerFactory {
     );
   }
 
-  protected function registerServiceTools(Server\Builder $builder): void {
+  /**
+   * Register service introspection tools.
+   */
+  protected function registerServiceTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -512,7 +619,10 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'module' => ['type' => 'string', 'description' => 'Module name to filter (e.g. metastore, datastore). Omit for all DKAN services.'],
+          'module' => [
+            'type' => 'string',
+            'description' => 'Module name to filter (e.g. metastore, datastore). Omit for all DKAN services.',
+          ],
         ],
       ],
     );
@@ -549,7 +659,10 @@ class McpServerFactory {
     );
   }
 
-  protected function registerWriteTools(Server\Builder $builder): void {
+  /**
+   * Register write operation tools.
+   */
+  protected function registerWriteTools(Builder $builder): void {
     $write = new ToolAnnotations(readOnlyHint: FALSE);
 
     $builder->addTool(
@@ -611,8 +724,15 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'resource_id' => ['type' => 'string', 'description' => 'Resource ID in identifier__version format (from list_distributions)'],
-          'deferred' => ['type' => 'boolean', 'description' => 'Queue for background processing instead of running inline', 'default' => FALSE],
+          'resource_id' => [
+            'type' => 'string',
+            'description' => 'Resource ID in identifier__version format (from list_distributions)',
+          ],
+          'deferred' => [
+            'type' => 'boolean',
+            'description' => 'Queue for background processing instead of running inline',
+            'default' => FALSE,
+          ],
         ],
         'required' => ['resource_id'],
       ],
@@ -661,9 +781,57 @@ class McpServerFactory {
         'required' => ['identifier'],
       ],
     );
+
+    $builder->addTool(
+      handler: fn(string $identifier) => $this->writeTools->publishDataset($identifier),
+      name: 'publish_dataset',
+      description: 'Publish a dataset to make it publicly visible. The dataset must already exist.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'identifier' => ['type' => 'string', 'description' => 'Dataset UUID'],
+        ],
+        'required' => ['identifier'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $identifier) => $this->writeTools->unpublishDataset($identifier),
+      name: 'unpublish_dataset',
+      description: 'Unpublish (archive) a dataset to remove it from public visibility. The dataset is not deleted.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'identifier' => ['type' => 'string', 'description' => 'Dataset UUID'],
+        ],
+        'required' => ['identifier'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $resource_id) => $this->writeTools->dropDatastore($resource_id),
+      name: 'drop_datastore',
+      description: 'Drop the datastore table for a resource. Use import_resource to re-import afterward if needed.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'resource_id' => [
+            'type' => 'string',
+            'description' => 'Resource ID in identifier__version format (from list_distributions)',
+          ],
+        ],
+        'required' => ['resource_id'],
+      ],
+    );
   }
 
-  protected function registerStatusTools(Server\Builder $builder): void {
+  /**
+   * Register status tools.
+   */
+  protected function registerStatusTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -682,13 +850,19 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'queue_name' => ['type' => 'string', 'description' => 'Specific queue name (e.g. datastore_import). Omit for all DKAN queues.'],
+          'queue_name' => [
+            'type' => 'string',
+            'description' => 'Specific queue name (e.g. datastore_import). Omit for all DKAN queues.',
+          ],
         ],
       ],
     );
   }
 
-  protected function registerDrupalTools(Server\Builder $builder): void {
+  /**
+   * Register Drupal introspection tools.
+   */
+  protected function registerDrupalTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -699,7 +873,11 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'group' => ['type' => 'string', 'description' => 'Filter by group: "content" or "configuration"', 'enum' => ['content', 'configuration']],
+          'group' => [
+            'type' => 'string',
+            'description' => 'Filter by group: "content" or "configuration"',
+            'enum' => ['content', 'configuration'],
+          ],
         ],
       ],
     );
@@ -712,8 +890,14 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'entity_type_id' => ['type' => 'string', 'description' => 'Entity type ID (e.g. node, user, taxonomy_term)'],
-          'bundle' => ['type' => 'string', 'description' => 'Bundle name (e.g. article, page). Omit for base fields only.'],
+          'entity_type_id' => [
+            'type' => 'string',
+            'description' => 'Entity type ID (e.g. node, user, taxonomy_term)',
+          ],
+          'bundle' => [
+            'type' => 'string',
+            'description' => 'Bundle name (e.g. article, page). Omit for base fields only.',
+          ],
         ],
         'required' => ['entity_type_id'],
       ],
@@ -727,7 +911,10 @@ class McpServerFactory {
       inputSchema: [
         'type' => 'object',
         'properties' => [
-          'name_contains' => ['type' => 'string', 'description' => 'Filter modules whose machine name contains this substring'],
+          'name_contains' => [
+            'type' => 'string',
+            'description' => 'Filter modules whose machine name contains this substring',
+          ],
         ],
       ],
     );
@@ -775,7 +962,10 @@ class McpServerFactory {
     );
   }
 
-  protected function registerLogTools(Server\Builder $builder): void {
+  /**
+   * Register log tools.
+   */
+  protected function registerLogTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -792,7 +982,10 @@ class McpServerFactory {
         'type' => 'object',
         'properties' => [
           'type' => ['type' => 'string', 'description' => 'Filter by log type (e.g. "dkan", "php", "user", "cron")'],
-          'severity' => ['type' => 'integer', 'description' => 'Max severity level 0-7. 0=Emergency, 3=Error, 4=Warning, 7=Debug. Returns entries at this level and above (more severe).'],
+          'severity' => [
+            'type' => 'integer',
+            'description' => 'Max severity level 0-7. 0=Emergency, 3=Error, 4=Warning, 7=Debug.',
+          ],
           'limit' => ['type' => 'integer', 'description' => 'Max entries to return (1-100)', 'default' => 25],
           'offset' => ['type' => 'integer', 'description' => 'Pagination offset', 'default' => 0],
         ],

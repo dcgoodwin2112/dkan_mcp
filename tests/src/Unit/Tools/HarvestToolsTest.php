@@ -133,4 +133,145 @@ class HarvestToolsTest extends TestCase {
     $this->assertStringContainsString('Harvest plan not found', $result['error']);
   }
 
+  public function testRegisterHarvestSuccess(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->expects($this->once())
+      ->method('registerHarvest')
+      ->with($this->callback(function ($plan) {
+        return $plan->identifier === 'test_plan'
+          && $plan->extract->type === 'index';
+      }));
+
+    $tools = $this->createTools($harvest);
+    $plan = json_encode([
+      'identifier' => 'test_plan',
+      'extract' => ['type' => 'index', 'uri' => 'http://example.com/data.json'],
+      'load' => ['type' => 'dataset'],
+    ]);
+    $result = $tools->registerHarvest($plan);
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertEquals('test_plan', $result['plan_id']);
+  }
+
+  public function testRegisterHarvestInvalidJson(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->expects($this->never())->method('registerHarvest');
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->registerHarvest('{invalid}');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Invalid JSON', $result['error']);
+  }
+
+  public function testRegisterHarvestNonObject(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->expects($this->never())->method('registerHarvest');
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->registerHarvest('"just a string"');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('JSON object', $result['error']);
+  }
+
+  public function testRegisterHarvestError(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->method('registerHarvest')
+      ->willThrowException(new \Exception('Validation failed'));
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->registerHarvest('{"identifier":"bad"}');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Validation failed', $result['error']);
+  }
+
+  public function testRunHarvestSuccess(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->method('getHarvestPlanObject')
+      ->with('test_plan')
+      ->willReturn((object) ['identifier' => 'test_plan']);
+    $harvest->expects($this->once())
+      ->method('runHarvest')
+      ->with('test_plan')
+      ->willReturn(['status' => ['extract' => 'SUCCESS']]);
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->runHarvest('test_plan');
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertEquals('test_plan', $result['plan_id']);
+    $this->assertArrayHasKey('result', $result);
+  }
+
+  public function testRunHarvestNotFound(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->method('getHarvestPlanObject')->willReturn(NULL);
+    $harvest->expects($this->never())->method('runHarvest');
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->runHarvest('nonexistent');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Harvest plan not found', $result['error']);
+  }
+
+  public function testRunHarvestError(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->method('getHarvestPlanObject')
+      ->willReturn((object) ['identifier' => 'test_plan']);
+    $harvest->method('runHarvest')
+      ->willThrowException(new \Exception('Extract failed'));
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->runHarvest('test_plan');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Extract failed', $result['error']);
+  }
+
+  public function testDeregisterHarvestSuccess(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->method('getHarvestPlanObject')
+      ->with('test_plan')
+      ->willReturn((object) ['identifier' => 'test_plan']);
+    $harvest->expects($this->once())
+      ->method('deregisterHarvest')
+      ->with('test_plan');
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->deregisterHarvest('test_plan');
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertEquals('test_plan', $result['plan_id']);
+  }
+
+  public function testDeregisterHarvestNotFound(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->method('getHarvestPlanObject')->willReturn(NULL);
+    $harvest->expects($this->never())->method('deregisterHarvest');
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->deregisterHarvest('nonexistent');
+
+    $this->assertEquals('not_found', $result['status']);
+    $this->assertStringContainsString('not found', $result['message']);
+  }
+
+  public function testDeregisterHarvestError(): void {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->method('getHarvestPlanObject')
+      ->willReturn((object) ['identifier' => 'test_plan']);
+    $harvest->method('deregisterHarvest')
+      ->willThrowException(new \Exception('Deregister failed'));
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->deregisterHarvest('test_plan');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Deregister failed', $result['error']);
+  }
+
 }

@@ -1,6 +1,6 @@
 # Tool Reference
 
-Per-tool parameter schemas, response shapes, and behavioral notes for all 45 dkan_mcp tools. For workflow sequences and common mistakes, see [CLAUDE.md](../CLAUDE.md). For overview tables and installation, see [README.md](../README.md).
+Per-tool parameter schemas, response shapes, and behavioral notes for all 52 dkan_mcp tools. For workflow sequences and common mistakes, see [CLAUDE.md](../CLAUDE.md). For overview tables and installation, see [README.md](../README.md).
 
 **Error convention:** All tools return `{"error": "message"}` on failure. Only success responses are documented below.
 
@@ -77,6 +77,20 @@ Get the full DCAT data catalog.
 **Notes:**
 - Descriptions truncated to 200 chars
 - `spatial` field removed to reduce token usage
+
+### `get_schema`
+
+Get a JSON Schema definition by schema ID.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema_id` | string | yes | -- | Schema ID (e.g., `dataset`, `distribution`, `keyword`) |
+
+**Response:** `{schema_id, schema: {type, properties, required, ...}}`
+
+**Notes:**
+- Use `list_schemas` to discover available schema IDs
+- Returns the full JSON Schema object including property definitions, types, and validation constraints
 
 ### `get_dataset_info`
 
@@ -273,6 +287,52 @@ Get detailed result for a specific harvest run.
 | `run_id` | string | no | latest | Run ID/timestamp |
 
 **Response:** `{result: {status: {extract, transform, load}, extracted_items_ids, orphan_ids, identifier}}` -- same structure as `get_harvest_runs` entries. `plan` key removed.
+
+### `register_harvest`
+
+Register a new harvest plan.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `plan` | string | yes | -- | Harvest plan as a JSON string |
+
+**Response:** `{status: "success", plan_id, message}`
+
+**Notes:**
+- Plan JSON must be an object with `identifier`, `extract` (with `type` and `uri`), and `load` (with `type`) properties
+- `extract.type`: typically `\Harvest\ETL\Extract\DataJson`
+- `load.type`: typically `\Drupal\harvest\Load\Dataset`
+- Re-registering an existing plan ID overwrites silently
+- Validates JSON structure before calling DKAN; returns `{error}` for invalid JSON, non-object, or missing required properties
+
+### `run_harvest`
+
+Execute a harvest run for a registered plan.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `plan_id` | string | yes | -- | Harvest plan ID |
+
+**Response:** `{status: "success", plan_id, result: {status: {extract, transform, load}, extracted_items_ids, orphan_ids, identifier}, message}`
+
+**Notes:**
+- Returns `{error: "Harvest plan not found: {id}"}` if plan doesn't exist
+- `result` contains the full harvest run output including per-dataset load status (`NEW`, `UPDATED`, `UNCHANGED`)
+- Runs synchronously — may take time for large source catalogs
+
+### `deregister_harvest`
+
+Remove a registered harvest plan.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `plan_id` | string | yes | -- | Harvest plan ID |
+
+**Response:** `{status: "success", plan_id, message}` or `{status: "not_found", plan_id, message}`
+
+**Notes:**
+- Does not delete datasets that were previously harvested by this plan
+- Returns `not_found` if plan doesn't exist
 
 ## Introspection
 
@@ -505,6 +565,50 @@ Delete a dataset and cascade-delete distributions and datastore tables.
 **Notes:**
 - Destructive and irreversible
 - Cascade-deletes associated distributions and datastore tables
+
+### `publish_dataset`
+
+Publish a dataset to make it publicly visible.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `identifier` | string | yes | -- | Dataset UUID |
+
+**Response:** `{status: "success", identifier, message}` or `{status: "not_found", identifier, message}`
+
+**Notes:**
+- Idempotent — publishing an already-published dataset returns success
+- Dataset must exist; returns `not_found` otherwise
+
+### `unpublish_dataset`
+
+Unpublish (archive) a dataset to remove it from public visibility.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `identifier` | string | yes | -- | Dataset UUID |
+
+**Response:** `{status: "success", identifier, message}` or `{status: "not_found", identifier, message}`
+
+**Notes:**
+- Idempotent — unpublishing an already-archived dataset returns success
+- Dataset is not deleted, only hidden from public-facing queries (`get_dataset` defaults to published only)
+- DKAN calls this "archive" internally
+
+### `drop_datastore`
+
+Drop the datastore table for a resource.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `resource_id` | string | yes | -- | Resource ID (`identifier__version`) |
+
+**Response:** `{status: "success", resource_id, message}`
+
+**Notes:**
+- Removes the database table backing the imported CSV data
+- Use `import_resource` afterward to re-import if needed
+- Returns error if the datastore table doesn't exist (already dropped or never imported)
 
 ## Status
 
