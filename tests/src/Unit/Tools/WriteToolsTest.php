@@ -345,4 +345,92 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('missing-uuid', $result['identifier']);
   }
 
+  public function testPublishDatasetSuccess(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->once())
+      ->method('publish')
+      ->with('dataset', 'test-uuid');
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->publishDataset('test-uuid');
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertEquals('test-uuid', $result['identifier']);
+  }
+
+  public function testPublishDatasetNotFound(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('publish')
+      ->willThrowException(new MissingObjectException('Not found'));
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->publishDataset('missing-uuid');
+
+    $this->assertEquals('not_found', $result['status']);
+    $this->assertEquals('missing-uuid', $result['identifier']);
+  }
+
+  public function testPublishDatasetError(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('publish')
+      ->willThrowException(new \Exception('Unexpected error'));
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->publishDataset('test-uuid');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Unexpected error', $result['error']);
+  }
+
+  public function testUnpublishDatasetSuccess(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->once())
+      ->method('archive')
+      ->with('dataset', 'test-uuid');
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->unpublishDataset('test-uuid');
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertEquals('test-uuid', $result['identifier']);
+    $this->assertStringContainsString('unpublished', $result['message']);
+  }
+
+  public function testUnpublishDatasetNotFound(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('archive')
+      ->willThrowException(new MissingObjectException('Not found'));
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->unpublishDataset('missing-uuid');
+
+    $this->assertEquals('not_found', $result['status']);
+    $this->assertEquals('missing-uuid', $result['identifier']);
+  }
+
+  public function testDropDatastoreSuccess(): void {
+    $datastore = $this->createMock(DatastoreService::class);
+    $datastore->expects($this->once())
+      ->method('drop')
+      ->with('abc123', '456');
+
+    $tools = $this->createTools(datastore: $datastore);
+    $result = $tools->dropDatastore('abc123__456');
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertEquals('abc123__456', $result['resource_id']);
+  }
+
+  public function testDropDatastoreError(): void {
+    $datastore = $this->createMock(DatastoreService::class);
+    $datastore->method('drop')
+      ->willThrowException(new \Exception('Table not found'));
+
+    $tools = $this->createTools(datastore: $datastore);
+    $result = $tools->dropDatastore('bad__id');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Table not found', $result['error']);
+  }
+
 }

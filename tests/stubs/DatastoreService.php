@@ -21,4 +21,7 @@ class DatastoreService {
     return [];
   }
 
+  public function drop(string $identifier, ?string $version = NULL): void {
+  }
+
 }

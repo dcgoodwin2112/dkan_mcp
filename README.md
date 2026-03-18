@@ -1,6 +1,6 @@
 # DKAN MCP
 
-MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 45 tools: 37 read-only for discovery and querying, 8 write tools for cache management, module operations, dataset CRUD, and imports.
+MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 52 tools: 38 read-only for discovery and querying, 14 write tools for cache management, module operations, dataset lifecycle, datastore management, harvest operations, and imports.
 
 ## Why This Module Exists
 
@@ -26,7 +26,7 @@ dkan_mcp bridges that gap. It gives your AI agent direct access to a running DKA
 
 These tools enable a closed-loop workflow: discover services and events → understand their APIs → write module code → validate against the live system. The agent doesn't need to context-switch between reading docs, grepping source, and running Drush commands. Each tool returns structured data optimized for programmatic consumption.
 
-See [docs/mcp-tools-evaluation.md](docs/mcp-tools-evaluation.md) for a detailed assessment of each tool's development value.
+See [docs/tool-suite-review.md](docs/tool-suite-review.md) for the tool suite assessment.
 
 ## Requirements
 
@@ -137,6 +137,7 @@ Tools are organized by platform scope:
 | `get_distribution` | `identifier` | Distribution metadata by UUID |
 | `list_schemas` | — | Available metadata schema IDs |
 | `get_catalog` | — | Full DCAT catalog |
+| `get_schema` | `schema_id` | JSON Schema definition by schema ID |
 | `get_dataset_info` | `uuid` | Aggregated lineage: distributions, resources, import status, perspectives |
 
 ### Datastore
@@ -164,6 +165,9 @@ Tools are organized by platform scope:
 | `get_harvest_plan` | `plan_id` | Plan config: source URL, extract/transform/load settings |
 | `get_harvest_runs` | `plan_id` | All runs with timestamps and status |
 | `get_harvest_run_result` | `plan_id`, `run_id?` | Detailed run result (latest if `run_id` omitted) |
+| `register_harvest` | `plan` | Register a new harvest plan (JSON string) |
+| `run_harvest` | `plan_id` | Execute a harvest run for a registered plan |
+| `deregister_harvest` | `plan_id` | Remove a registered harvest plan |
 
 ### DKAN Introspection
 
@@ -191,6 +195,9 @@ Tools are organized by platform scope:
 | `update_dataset` | `identifier`, `metadata` | Full replacement of dataset metadata (PUT semantics) |
 | `patch_dataset` | `identifier`, `metadata` | Partial update via JSON Merge Patch (RFC 7396) |
 | `delete_dataset` | `identifier` | Delete a dataset and cascade-delete distributions and datastore tables |
+| `publish_dataset` | `identifier` | Publish a dataset to make it publicly visible |
+| `unpublish_dataset` | `identifier` | Unpublish (archive) a dataset |
+| `drop_datastore` | `resource_id` | Drop the datastore table for a resource |
 
 ### Status
 

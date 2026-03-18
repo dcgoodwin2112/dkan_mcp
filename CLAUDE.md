@@ -45,7 +45,7 @@ The method signatures include parameter names, types, optionality, and return ty
 3. `check_permissions` — validate no orphaned or misconfigured permissions
 4. After adding routes, run `check_permissions` again to catch issues early
 
-### Dataset Lifecycle (Create → Update → Delete)
+### Dataset Lifecycle (Create → Publish → Update → Delete)
 
 1. `create_test_dataset(title, download_url)` — create a dataset with a CSV distribution, returns dataset UUID
 2. `list_distributions(dataset_id)` — get the `resource_id` for the new distribution
@@ -54,7 +54,25 @@ The method signatures include parameter names, types, optionality, and return ty
 5. `query_datastore(resource_id)` — query the imported data
 6. `patch_dataset(identifier, '{"title": "New Title"}')` — partial metadata update (JSON Merge Patch)
 7. `update_dataset(identifier, full_metadata_json)` — full metadata replacement (PUT)
-8. `delete_dataset(identifier)` — remove dataset and cascade-delete distributions/datastore tables
+8. `unpublish_dataset(identifier)` — archive a dataset (hides from public queries, does not delete)
+9. `publish_dataset(identifier)` — re-publish an archived dataset
+10. `drop_datastore(resource_id)` — drop the datastore table (use `import_resource` to re-import)
+11. `delete_dataset(identifier)` — remove dataset and cascade-delete distributions/datastore tables
+
+### Harvest Management
+
+1. `list_harvest_plans` — see existing harvest plan IDs
+2. `get_harvest_plan(plan_id)` — inspect plan config (source URI, extract/load types)
+3. `register_harvest(plan_json)` — register a new plan (must include `identifier`, `extract`, `load`)
+4. `run_harvest(plan_id)` — execute the harvest (extract → transform → load)
+5. `get_harvest_runs(plan_id)` — list all runs with timestamps
+6. `get_harvest_run_result(plan_id)` — inspect latest run result (per-dataset status)
+7. `deregister_harvest(plan_id)` — remove a plan (does not delete previously harvested datasets)
+
+### Schema Discovery
+
+1. `list_schemas` — discover available schema IDs (dataset, distribution, keyword, theme, etc.)
+2. `get_schema(schema_id)` — get the full JSON Schema definition with property types and validation constraints
 
 ### Debugging
 
@@ -100,11 +118,16 @@ Metastore tools use **UUIDs**. Datastore tools use **resource IDs** (`{identifie
 | Tool | Accepts |
 |---|---|
 | `get_dataset`, `list_distributions`, `get_distribution`, `get_dataset_info` | UUID |
+| `publish_dataset`, `unpublish_dataset` | UUID |
 | `query_datastore`, `get_datastore_schema`, `get_datastore_stats`, `get_import_status`, `import_resource` | `identifier__version` |
+| `drop_datastore` | `identifier__version` |
 | `resolve_resource` | Either format (but see Common Mistakes) |
 | `search_datasets` | keyword string |
 | `create_test_dataset` | `title` + `download_url` |
 | `update_dataset`, `patch_dataset`, `delete_dataset` | UUID |
+| `get_schema` | schema ID string (e.g., `dataset`, `distribution`) |
+| `register_harvest` | plan JSON string |
+| `run_harvest`, `deregister_harvest` | plan ID string |
 | `get_queue_status` | queue name string (optional) |
 | `clear_cache`, `enable_module`, `disable_module` | module name or no args |
 
@@ -196,6 +219,9 @@ Accepts DKAN module names: `metastore`, `datastore`, `harvest`, `common`, `metas
 | Guessing entity types, field names, or bundles | Use `list_entity_types` and `get_entity_fields` to discover them |
 | Guessing plugin IDs or route names | Use `list_plugins` or `get_route_info` to discover them |
 | Asking the user to check Drupal logs manually | Use `get_recent_logs` to read watchdog entries directly |
+| Expecting `get_dataset` to return unpublished datasets | `get_dataset` defaults to published only; use `publish_dataset` to restore visibility |
+| Passing plan JSON as an object to `register_harvest` | Parameter is a JSON **string**, not an object — serialize with `json_encode` or pass raw JSON |
+| Guessing schema property names for dataset validation | Use `get_schema("dataset")` to get the full JSON Schema with required fields and types |
 
 ## When to Use MCP vs Code Reading
 
@@ -215,6 +241,10 @@ Accepts DKAN module names: `metastore`, `datastore`, `harvest`, `common`, `metas
 | Find datasets with specific column types | `search_columns` | — |
 | Cross-dataset correlation | `query_datastore_join` | — |
 | Import/harvest state | `get_import_status`, `get_harvest_runs` | — |
+| Metadata schema definitions and validation rules | `get_schema` | — |
+| Dataset publish/unpublish state management | `publish_dataset`, `unpublish_dataset` | — |
+| Harvest plan registration and execution | `register_harvest`, `run_harvest`, `deregister_harvest` | — |
+| Datastore table cleanup | `drop_datastore` | — |
 | Runtime errors, import failures, permission denials | `get_recent_logs` | — |
 | **Drupal** | | |
 | Entity types, bundles, field definitions | `list_entity_types`, `get_entity_fields` | — |
