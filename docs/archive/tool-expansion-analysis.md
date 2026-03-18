@@ -1,4 +1,4 @@
-> **Deprecated**: This document covers the 40-tool suite and is no longer current. See [tool-suite-review.md](tool-suite-review.md) for the comprehensive 45-tool assessment.
+> **Deprecated**: This document covers the 40-tool suite and is no longer current. See [tool-suite-review.md](../tool-suite-review.md) for the comprehensive 45-tool assessment.
 
 # MCP Tool Expansion Analysis
 

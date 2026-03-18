@@ -62,4 +62,12 @@ class MetastoreService {
     return $identifier;
   }
 
+  public function archive(string $schema_id, string $identifier): bool {
+    return TRUE;
+  }
+
+  public function getSchema(string $schema_id) {
+    return new \stdClass();
+  }
+
 }
