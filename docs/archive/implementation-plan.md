@@ -1,4 +1,4 @@
-> **Deprecated**: This is the original implementation plan for dkan_mcp, now historical. See [tool-suite-review.md](tool-suite-review.md) for the current state assessment.
+> **Deprecated**: This is the original implementation plan for dkan_mcp, now historical. See [tool-suite-review.md](../tool-suite-review.md) for the current state assessment.
 
 # Plan: DKAN MCP Module
 

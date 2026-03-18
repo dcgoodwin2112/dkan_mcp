@@ -242,4 +242,34 @@ class MetastoreToolsTest extends TestCase {
     $this->assertStringContainsString('nonexistent', $result['error']);
   }
 
+  public function testGetSchema(): void {
+    $schema = (object) [
+      'type' => 'object',
+      'properties' => (object) [
+        'title' => (object) ['type' => 'string'],
+      ],
+    ];
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('getSchema')->with('dataset')->willReturn($schema);
+
+    $tools = $this->createTools($metastore);
+    $result = $tools->getSchema('dataset');
+
+    $this->assertEquals('dataset', $result['schema_id']);
+    $this->assertArrayHasKey('schema', $result);
+    $this->assertEquals('object', $result['schema']['type']);
+  }
+
+  public function testGetSchemaError(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('getSchema')
+      ->willThrowException(new \Exception('Schema not found'));
+
+    $tools = $this->createTools($metastore);
+    $result = $tools->getSchema('nonexistent');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Schema not found', $result['error']);
+  }
+
 }

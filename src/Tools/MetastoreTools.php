@@ -144,6 +144,22 @@ class MetastoreTools {
   }
 
   /**
+   * Get a JSON Schema definition by schema ID.
+   */
+  public function getSchema(string $schemaId): array {
+    try {
+      $schema = $this->metastore->getSchema($schemaId);
+      return [
+        'schema_id' => $schemaId,
+        'schema' => is_string($schema) ? json_decode($schema, TRUE) : json_decode(json_encode($schema), TRUE),
+      ];
+    }
+    catch (\Throwable $e) {
+      return ['error' => $e->getMessage()];
+    }
+  }
+
+  /**
    * Recursively strip all %-prefixed internal keys from decoded JSON data.
    */
   private static function stripInternalKeys(array $data): array {

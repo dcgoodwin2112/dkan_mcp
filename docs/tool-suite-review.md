@@ -1,8 +1,8 @@
 # dkan_mcp Tool Suite Review
 
-Comprehensive assessment of the 45-tool suite across 12 tool classes. Evaluates usefulness for DKAN contrib and core module development, identifies gaps, and prioritizes improvements.
+Comprehensive assessment of the 52-tool suite across 12 tool classes. Evaluates usefulness for DKAN contrib and core module development, identifies gaps, and prioritizes improvements.
 
-**Last updated**: 2026-03-17
+**Last updated**: 2026-03-18
 
 ## Rating System
 
@@ -16,20 +16,20 @@ Comprehensive assessment of the 45-tool suite across 12 tool classes. Evaluates 
 
 | Category | Tools | Contrib | Core | Top Gap |
 |----------|-------|---------|------|---------|
-| MetastoreTools | 6 | Strong | Adequate | Schema content retrieval (only IDs, not schema JSON), revision management, archive/publish lifecycle |
+| MetastoreTools | 8 | Strong | Strong | Revision management |
 | DatastoreTools | 6 | Strong | Strong | Enhanced import diagnostics (`ImportInfo`/`ImportInfoList` expose fetcher state, progress %, timestamps — current tool only infers from row count) |
 | SearchTools | 1 | Adequate | Adequate | Faceted search (`/api/1/search/facets` endpoint exists, no tool) |
-| HarvestTools | 4 | Adequate | **Gap** | No write operations — can't register plans, trigger runs, or revert through MCP. Must use Drush |
+| HarvestTools | 7 | Strong | Strong | Minor: no revert operation |
 | ServiceTools | 3 | Strong | Strong | Minor: `get_service_info` shows only own-class methods; `get_class_info` needed for inherited |
 | EventTools | 2 | Strong | Strong | `EVENT_PAYLOAD_TYPES` map covers only 5 of 13+ events. Import/localization events lack payload type info |
 | PermissionTools | 3 | Strong | Strong | None |
 | ResourceTools | 1 | Strong | Adequate | `findOwningDataset()` iterates ALL datasets — slow on large catalogs. `ReferenceLookup::getReferencers()` would be more efficient |
-| WriteTools | 8 | Adequate | **Gap** | No standalone publish/archive. No harvest write ops. No queue processing. No metadata pre-validation |
+| WriteTools | 11 | Strong | Strong | No queue processing. No metadata pre-validation |
 | DrupalTools | 6 | Strong | Strong | None |
 | StatusTools | 2 | Adequate | Adequate | Queue is read-only (counts only). No processing, inspection, or clearing |
 | LogTools | 2 | Strong | Strong | None |
 
-**Overall: Strong for contrib development. Adequate for core, with specific gaps in harvest operations, import diagnostics, and lifecycle management.**
+**Overall: Strong for both contrib and core development. Remaining gaps are in import diagnostics, faceted search, and queue processing — all Tier 2/3 items.**
 
 ## Workflow Composition Assessment
 
@@ -47,9 +47,9 @@ Seven key multi-step workflows that combine tools:
 
 `get_import_status` gives basic pass/fail. `get_recent_logs(type: "datastore")` provides errors. `get_queue_status` shows depth. But no fetch progress, parse error details, or timestamps. `ImportInfo`/`ImportInfoList` services would close this.
 
-### 4. Set up and validate a harvest pipeline — Gap
+### 4. Set up and validate a harvest pipeline — Strong
 
-Can read plans/runs but can't register, trigger, or revert. Must fall back to Drush.
+`list_harvest_plans` → `register_harvest` → `run_harvest` → `get_harvest_runs` → `get_harvest_run_result`. Full closed-loop harvest development.
 
 ### 5. Assess impact of deleting a metadata item — Gap
 
@@ -69,22 +69,22 @@ No `getReferencers()` tool. No pre-validation. `resolve_resource` traces forward
 
 Unlocks new developer workflows.
 
-| Gap | What It Enables | Difficulty | DKAN Service |
-|-----|----------------|------------|--------------|
-| Schema content retrieval | See required metadata fields, validate datasets before creation | Low | `SchemaRetriever::retrieve()` |
-| Enhanced import diagnostics | Fetcher state, progress %, error details, timestamps | Medium | `ImportInfo`, `ImportInfoList` |
-| Harvest write operations | Register plans, trigger runs, revert — closed-loop harvest dev | Medium | `HarvestService::registerHarvest()`, `runHarvest()`, `revertHarvest()` |
+| Gap | What It Enables | Difficulty | DKAN Service | Status |
+|-----|----------------|------------|--------------|--------|
+| ~~Schema content retrieval~~ | ~~See required metadata fields, validate datasets before creation~~ | ~~Low~~ | ~~`SchemaRetriever::retrieve()`~~ | Done (`get_schema`) |
+| Enhanced import diagnostics | Fetcher state, progress %, error details, timestamps | Medium | `ImportInfo`, `ImportInfoList` | Open |
+| ~~Harvest write operations~~ | ~~Register plans, trigger runs, revert — closed-loop harvest dev~~ | ~~Medium~~ | ~~`HarvestService::registerHarvest()`, `runHarvest()`, `revertHarvest()`~~ | Done (`register_harvest`, `run_harvest`, `deregister_harvest`) |
 
 ### Tier 2 — Medium Impact
 
 Fills notable gaps in existing workflows.
 
-| Gap | What It Enables | Difficulty | DKAN Service |
-|-----|----------------|------------|--------------|
-| Reference impact analysis | "What references this UUID?" for safe deletion | Low | `ReferenceLookup::getReferencers()` |
-| Archive/Publish lifecycle | Standalone publish/archive beyond `create_test_dataset` | Low | `MetastoreService::publish()`, `archive()` |
-| Complete event payload mapping | Payload types for all 13+ events, not just 5 | Low | Research + constants |
-| Metadata pre-validation | Validate JSON against schema before posting | Low-Medium | `ValidMetadataFactory` |
+| Gap | What It Enables | Difficulty | DKAN Service | Status |
+|-----|----------------|------------|--------------|--------|
+| Reference impact analysis | "What references this UUID?" for safe deletion | Low | `ReferenceLookup::getReferencers()` | Open |
+| ~~Archive/Publish lifecycle~~ | ~~Standalone publish/archive beyond `create_test_dataset`~~ | ~~Low~~ | ~~`MetastoreService::publish()`, `archive()`~~ | Done (`publish_dataset`, `unpublish_dataset`) |
+| Complete event payload mapping | Payload types for all 13+ events, not just 5 | Low | Research + constants | Open |
+| Metadata pre-validation | Validate JSON against schema before posting | Low-Medium | `ValidMetadataFactory` | Open |
 
 ### Tier 3 — Lower Impact
 
@@ -103,4 +103,4 @@ Useful but workarounds exist.
 
 ## Test Coverage
 
-All 12 tool classes have corresponding unit test files. Tests use standalone stubs (no Drupal bootstrap). 213 tests, 664 assertions.
+All 12 tool classes have corresponding unit test files. Tests use standalone stubs (no Drupal bootstrap). 232 tests, 715 assertions.

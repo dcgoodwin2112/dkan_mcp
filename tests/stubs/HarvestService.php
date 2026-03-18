@@ -27,4 +27,16 @@ class HarvestService {
     return [];
   }
 
+  public function registerHarvest(object $plan): string {
+    return $plan->identifier ?? '';
+  }
+
+  public function runHarvest(string $plan_id): array {
+    return [];
+  }
+
+  public function deregisterHarvest(string $plan_id): bool {
+    return TRUE;
+  }
+
 }
