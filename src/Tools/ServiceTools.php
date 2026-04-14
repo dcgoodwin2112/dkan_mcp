@@ -19,13 +19,17 @@ class ServiceTools {
   /**
    * List DKAN service IDs with class names.
    */
-  public function listServices(?string $module = NULL): array {
+  public function listServices(?string $module = NULL, bool $brief = FALSE): array {
     $prefix = $module ? "dkan.{$module}." : 'dkan.';
     $ids = array_filter(
       $this->container->getServiceIds(),
       fn($id) => str_starts_with($id, $prefix)
     );
     sort($ids);
+
+    if ($brief) {
+      return ['services' => array_values($ids), 'total' => count($ids)];
+    }
 
     $services = [];
     foreach ($ids as $id) {
@@ -44,16 +48,20 @@ class ServiceTools {
   /**
    * Get the full public API of any PHP class or interface.
    */
-  public function getClassInfo(string $className): array {
+  public function getClassInfo(string $className, ?string $methods = NULL): array {
     if (!class_exists($className) && !interface_exists($className)) {
       return ['error' => "Class or interface not found: {$className}"];
     }
 
     $reflection = new \ReflectionClass($className);
+    $patterns = $methods ? array_map('trim', explode(',', $methods)) : NULL;
 
-    $methods = [];
+    $methodList = [];
     foreach ($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
       if (str_starts_with($method->getName(), '_')) {
+        continue;
+      }
+      if ($patterns && !$this->matchesAnyPattern($method->getName(), $patterns)) {
         continue;
       }
       $params = array_map(fn(\ReflectionParameter $p) => array_filter([
@@ -61,7 +69,7 @@ class ServiceTools {
         'type' => $p->getType() ? (string) $p->getType() : NULL,
         'optional' => $p->isOptional() ?: NULL,
       ], fn($v) => $v !== NULL), $method->getParameters());
-      $methods[] = [
+      $methodList[] = [
         'name' => $method->getName(),
         'params' => array_values($params),
         'return_type' => $method->getReturnType() ? (string) $method->getReturnType() : NULL,
@@ -81,14 +89,14 @@ class ServiceTools {
       'is_interface' => $reflection->isInterface(),
       'parent' => $parent ? $parent->getName() : NULL,
       'interfaces' => $interfaces,
-      'methods' => $methods,
+      'methods' => $methodList,
     ];
   }
 
   /**
    * Get detailed service info via reflection.
    */
-  public function getServiceInfo(string $serviceId): array {
+  public function getServiceInfo(string $serviceId, ?string $methods = NULL, bool $includeYaml = TRUE): array {
     if (!$this->container->has($serviceId)) {
       return ['error' => "Service not found: {$serviceId}"];
     }
@@ -102,6 +110,7 @@ class ServiceTools {
 
     $class = get_class($service);
     $reflection = new \ReflectionClass($class);
+    $patterns = $methods ? array_map('trim', explode(',', $methods)) : NULL;
 
     $constructorParams = [];
     $constructor = $reflection->getConstructor();
@@ -119,7 +128,7 @@ class ServiceTools {
       }
     }
 
-    $methods = [];
+    $methodList = [];
     foreach ($reflection->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
       if (str_starts_with($method->getName(), '_')) {
         continue;
@@ -127,12 +136,15 @@ class ServiceTools {
       if ($method->getDeclaringClass()->getName() !== $class) {
         continue;
       }
+      if ($patterns && !$this->matchesAnyPattern($method->getName(), $patterns)) {
+        continue;
+      }
       $params = array_map(fn(\ReflectionParameter $p) => array_filter([
         'name' => $p->getName(),
         'type' => $p->getType() ? (string) $p->getType() : NULL,
         'optional' => $p->isOptional() ?: NULL,
       ], fn($v) => $v !== NULL), $method->getParameters());
-      $methods[] = [
+      $methodList[] = [
         'name' => $method->getName(),
         'params' => array_values($params),
         'return_type' => $method->getReturnType() ? (string) $method->getReturnType() : NULL,
@@ -143,15 +155,84 @@ class ServiceTools {
       'service_id' => $serviceId,
       'class' => $class,
       'constructor_params' => $constructorParams,
-      'methods' => $methods,
+      'methods' => $methodList,
     ];
 
-    $yamlDef = $this->findServiceYamlDefinition($serviceId);
-    if ($yamlDef) {
-      $result['yaml_definition'] = $yamlDef;
+    if ($includeYaml) {
+      $yamlDef = $this->findServiceYamlDefinition($serviceId);
+      if ($yamlDef) {
+        $result['yaml_definition'] = $yamlDef;
+      }
     }
 
     return $result;
+  }
+
+  /**
+   * Discover a service's API and optionally follow return types.
+   */
+  public function discoverApi(string $serviceId, ?string $method = NULL, int $depth = 1): array {
+    $serviceInfo = $this->getServiceInfo($serviceId, $method, FALSE);
+    if (isset($serviceInfo['error'])) {
+      return $serviceInfo;
+    }
+
+    $result = ['service' => $serviceInfo];
+
+    if ($method && $depth > 0) {
+      $returnTypes = [];
+      foreach ($serviceInfo['methods'] as $m) {
+        $returnType = $m['return_type'] ?? NULL;
+        if ($returnType && !$this->isScalarType($returnType)) {
+          $returnTypes[$returnType] = TRUE;
+        }
+      }
+
+      foreach (array_keys($returnTypes) as $returnType) {
+        $classInfo = $this->getClassInfo($returnType);
+        if (!isset($classInfo['error'])) {
+          $result['return_types'][$returnType] = $classInfo;
+
+          if ($depth > 1) {
+            foreach ($classInfo['methods'] as $m) {
+              $nestedType = $m['return_type'] ?? NULL;
+              if ($nestedType && !$this->isScalarType($nestedType) && !isset($result['return_types'][$nestedType])) {
+                $nestedInfo = $this->getClassInfo($nestedType);
+                if (!isset($nestedInfo['error'])) {
+                  $result['return_types'][$nestedType] = $nestedInfo;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return $result;
+  }
+
+  /**
+   * Check if a method name matches any of the given glob patterns.
+   */
+  protected function matchesAnyPattern(string $name, array $patterns): bool {
+    foreach ($patterns as $pattern) {
+      if (fnmatch($pattern, $name)) {
+        return TRUE;
+      }
+    }
+    return FALSE;
+  }
+
+  /**
+   * Check if a type name is a scalar/built-in type.
+   */
+  protected function isScalarType(string $type): bool {
+    $type = ltrim($type, '?');
+    return in_array($type, [
+      'string', 'int', 'float', 'bool', 'array', 'void',
+      'null', 'mixed', 'never', 'self', 'static', 'object',
+      'callable', 'iterable', 'true', 'false',
+    ], TRUE);
   }
 
   /**
