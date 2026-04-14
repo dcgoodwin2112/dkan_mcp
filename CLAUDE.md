@@ -278,8 +278,9 @@ Tests use standalone stubs in `tests/stubs/` (no Drupal bootstrap). Stub classes
 1. Add a public method to the appropriate tool class in `src/Tools/` (or create a new tool class if it doesn't fit existing categories)
 2. Register it in `McpServerFactory` in the corresponding `register*Tools()` method using `$builder->addTool()` — define `handler`, `name`, `description`, `annotations` (`$readOnly` for read tools, `new ToolAnnotations(readOnlyHint: FALSE)` for write tools), and `inputSchema`
 3. Add a unit test in `tests/src/Unit/Tools/`
+4. If the tool should be available over HTTP, ensure it's in a tool group listed in `McpController::HTTP_TOOL_GROUPS`
 
-If adding a new tool class: create it as a Drupal service in `dkan_mcp.services.yml`, inject it into `McpServerFactory`, and add a `register*Tools()` method.
+If adding a new tool class: create it as a Drupal service in `dkan_mcp.services.yml`, inject it into `McpServerFactory`, add a `register*Tools()` method, and add the group key to `McpServerFactory::TOOL_GROUPS`.
 
 ### opis/json-schema Conflict
 
