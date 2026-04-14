@@ -253,6 +253,61 @@ class EventToolsTest extends TestCase {
     $this->assertArrayNotHasKey('dispatch_payload', $result);
   }
 
+  public function testListEventsBrief(): void {
+    [$container, $dispatcher] = $this->createDefaultMocks();
+    $service = new EventToolsTestServiceA();
+
+    $container->method('getServiceIds')->willReturn(['dkan.test.a']);
+    $container->method('get')->willReturn($service);
+
+    $tools = $this->createTools($container, $dispatcher);
+    $result = $tools->listEvents(NULL, TRUE);
+
+    $this->assertEquals(2, $result['total']);
+    // Brief mode returns plain string event names.
+    $this->assertIsString($result['events'][0]);
+    $this->assertContains('test_event_something', $result['events']);
+    $this->assertContains('test_event_other', $result['events']);
+  }
+
+  public function testGetEventInfoFields(): void {
+    [$container, $dispatcher] = $this->createDefaultMocks();
+    $service = new EventToolsTestServiceA();
+
+    $container->method('getServiceIds')->willReturn(['dkan.test.a']);
+    $container->method('get')->willReturn($service);
+    $dispatcher->method('getListeners')->willReturn([]);
+
+    $tools = $this->createTools($container, $dispatcher);
+    $result = $tools->getEventInfo('test_event_something', 'constant,module');
+
+    $this->assertArrayHasKey('constant', $result);
+    $this->assertArrayHasKey('module', $result);
+    $this->assertEquals('EVENT_SOMETHING', $result['constant']);
+    // Fields not in the filter should be excluded.
+    $this->assertArrayNotHasKey('event_name', $result);
+    $this->assertArrayNotHasKey('declaring_class', $result);
+    $this->assertArrayNotHasKey('subscribers', $result);
+  }
+
+  public function testGetEventInfoFieldsOmittedReturnsAll(): void {
+    [$container, $dispatcher] = $this->createDefaultMocks();
+    $service = new EventToolsTestServiceA();
+
+    $container->method('getServiceIds')->willReturn(['dkan.test.a']);
+    $container->method('get')->willReturn($service);
+    $dispatcher->method('getListeners')->willReturn([]);
+
+    $tools = $this->createTools($container, $dispatcher);
+    $result = $tools->getEventInfo('test_event_something');
+
+    // Without fields filter, all keys should be present.
+    $this->assertArrayHasKey('constant', $result);
+    $this->assertArrayHasKey('event_name', $result);
+    $this->assertArrayHasKey('declaring_class', $result);
+    $this->assertArrayHasKey('subscribers', $result);
+  }
+
   public function testInheritedConstantsExcluded(): void {
     [$container, $dispatcher] = $this->createDefaultMocks();
     $service = new EventToolsTestChildService();

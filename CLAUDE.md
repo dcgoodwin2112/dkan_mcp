@@ -23,17 +23,18 @@ Use `search_datasets(keyword)` as an alternative to step 1 when you know a keywo
 
 ### Service Discovery → Dependency Injection
 
-1. `list_services(module: "datastore")` — find service IDs in a module
-2. `get_service_info(service_id)` — get constructor params, method signatures, and YAML definition (including `calls` for setter injection and `tags`)
-3. `get_class_info(class_name)` — follow return types to discover the full API of returned objects (e.g., `getStorage()` returns `DatabaseTable` → inspect its `query(Query)` method → inspect `Query` class)
-4. Write `*.services.yml` arguments and constructor type hints from the response
+1. `list_services(module: "datastore")` — find service IDs in a module (use `brief: true` for ID-only list)
+2. `get_service_info(service_id)` — get constructor params, method signatures, and YAML definition (including `calls` for setter injection and `tags`). Use `methods: "get*"` to filter methods, `include_yaml: false` to skip YAML.
+3. `get_class_info(class_name)` — follow return types to discover the full API of returned objects. Use `methods: "query*"` to filter.
+4. `discover_api(service_id, method: "getStorage")` — combines steps 2-3 in one call: gets service info and follows return types automatically. Use `depth: 2` to follow two levels.
+5. Write `*.services.yml` arguments and constructor type hints from the response
 
 The method signatures include parameter names, types, optionality, and return types — enough to write working service calls without reading source code. The `yaml_definition` field reveals setter injection (`calls`) and service tags not visible from constructor reflection alone.
 
 ### Event-Driven Extension
 
-1. `list_events(module: "metastore")` — find event constants and string values
-2. `get_event_info(event_name)` — see declaring class, existing subscribers, event class, event class methods, and **dispatch_payload** (the type returned by `getData()` at the dispatch site — e.g., `MetastoreItemInterface` for dataset events)
+1. `list_events(module: "metastore")` — find event constants and string values (use `brief: true` for name-only list)
+2. `get_event_info(event_name)` — see declaring class, existing subscribers, event class, event class methods, and **dispatch_payload**. Use `fields: "constant,dispatch_payload"` to return only specific fields.
 3. Write an EventSubscriber with appropriate priority (check existing subscriber priorities to avoid conflicts)
 
 `get_event_info` includes `event_class`, `event_methods` (from subscriber type hints), and `dispatch_payload` (the actual type passed to `getData()` at the dispatch site). For events using `Drupal\common\Events\Event`, the `dispatch_payload.type` field reveals what `getData()` returns (e.g., `MetastoreItemInterface`), with `dispatch_payload.methods` listing its API.

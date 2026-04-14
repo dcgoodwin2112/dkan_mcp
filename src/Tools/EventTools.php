@@ -57,15 +57,21 @@ class EventTools {
   /**
    * List DKAN event constants with string values and declaring classes.
    */
-  public function listEvents(?string $module = NULL): array {
+  public function listEvents(?string $module = NULL, bool $brief = FALSE): array {
     $events = $this->discoverEvents($module);
+    if ($brief) {
+      return [
+        'events' => array_column($events, 'event_name'),
+        'total' => count($events),
+      ];
+    }
     return ['events' => $events, 'total' => count($events)];
   }
 
   /**
    * Get event details including registered subscribers.
    */
-  public function getEventInfo(string $eventName): array {
+  public function getEventInfo(string $eventName, ?string $fields = NULL): array {
     $events = $this->discoverEvents();
     $match = NULL;
     foreach ($events as $event) {
@@ -122,6 +128,11 @@ class EventTools {
         'dispatch_site' => $payload['dispatch_site'],
         'methods' => $this->getEventClassMethods($payload['type']),
       ];
+    }
+
+    if ($fields) {
+      $allowed = array_flip(array_map('trim', explode(',', $fields)));
+      $match = array_intersect_key($match, $allowed);
     }
 
     return $match;

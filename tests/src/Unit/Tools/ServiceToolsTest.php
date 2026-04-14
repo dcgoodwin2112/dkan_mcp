@@ -272,6 +272,142 @@ YAML
     $this->assertArrayNotHasKey('yaml_definition', $result);
   }
 
+  public function testListServicesBrief(): void {
+    $container = $this->createMock(ContainerInterface::class);
+    $container->method('getServiceIds')->willReturn([
+      'dkan.metastore.service',
+      'dkan.datastore.service',
+      'some.other.service',
+    ]);
+
+    $tools = $this->createTools($container);
+    $result = $tools->listServices(NULL, TRUE);
+
+    $this->assertEquals(2, $result['total']);
+    $this->assertContains('dkan.metastore.service', $result['services']);
+    $this->assertContains('dkan.datastore.service', $result['services']);
+    // Brief mode returns plain strings, not arrays with 'id'/'class'.
+    $this->assertIsString($result['services'][0]);
+  }
+
+  public function testGetServiceInfoMethodsFilter(): void {
+    $service = new ServiceToolsTestDouble('hello', 42);
+
+    $container = $this->createMock(ContainerInterface::class);
+    $container->method('has')->willReturn(TRUE);
+    $container->method('get')->willReturn($service);
+
+    $tools = $this->createTools($container);
+    $result = $tools->getServiceInfo('dkan.test.service', 'get*');
+
+    $methodNames = array_column($result['methods'], 'name');
+    $this->assertContains('getCount', $methodNames);
+    $this->assertNotContains('doSomething', $methodNames);
+  }
+
+  public function testGetServiceInfoMultiplePatterns(): void {
+    $service = new ServiceToolsTestDouble('hello', 42);
+
+    $container = $this->createMock(ContainerInterface::class);
+    $container->method('has')->willReturn(TRUE);
+    $container->method('get')->willReturn($service);
+
+    $tools = $this->createTools($container);
+    $result = $tools->getServiceInfo('dkan.test.service', 'get*, do*');
+
+    $methodNames = array_column($result['methods'], 'name');
+    $this->assertContains('getCount', $methodNames);
+    $this->assertContains('doSomething', $methodNames);
+  }
+
+  public function testGetServiceInfoExcludeYaml(): void {
+    $service = new ServiceToolsTestDouble('hello', 42);
+
+    $container = $this->createMock(ContainerInterface::class);
+    $container->method('has')->willReturn(TRUE);
+    $container->method('get')->willReturn($service);
+
+    // Set up a module handler that would return YAML.
+    $tmpDir = sys_get_temp_dir() . '/dkan_mcp_test_' . uniqid();
+    mkdir($tmpDir);
+    file_put_contents($tmpDir . '/testmod.services.yml', "services:\n  dkan.test.service:\n    class: Some\\Class\n    arguments: ['@dep']\n");
+
+    $ext = $this->createMock(\Drupal\Core\Extension\Extension::class);
+    $ext->method('getPath')->willReturn($tmpDir);
+
+    $moduleHandler = $this->createMock(\Drupal\Core\Extension\ModuleHandlerInterface::class);
+    $moduleHandler->method('getModuleList')->willReturn(['testmod' => $ext]);
+
+    $tools = $this->createTools($container, $moduleHandler);
+
+    // With includeYaml=FALSE, yaml_definition should not appear.
+    $result = $tools->getServiceInfo('dkan.test.service', NULL, FALSE);
+    $this->assertArrayNotHasKey('yaml_definition', $result);
+
+    // With includeYaml=TRUE (default), it should appear.
+    $result = $tools->getServiceInfo('dkan.test.service', NULL, TRUE);
+    $this->assertArrayHasKey('yaml_definition', $result);
+
+    unlink($tmpDir . '/testmod.services.yml');
+    rmdir($tmpDir);
+  }
+
+  public function testGetClassInfoMethodsFilter(): void {
+    $container = $this->createMock(ContainerInterface::class);
+    $tools = $this->createTools($container);
+    $result = $tools->getClassInfo(ClassInfoTestDouble::class, 'own*');
+
+    $methodNames = array_column($result['methods'], 'name');
+    $this->assertContains('ownMethod', $methodNames);
+    $this->assertNotContains('interfaceMethod', $methodNames);
+  }
+
+  public function testDiscoverApi(): void {
+    $service = new ServiceToolsTestDouble('hello', 42);
+
+    $container = $this->createMock(ContainerInterface::class);
+    $container->method('has')->willReturn(TRUE);
+    $container->method('get')->willReturn($service);
+
+    $tools = $this->createTools($container);
+    $result = $tools->discoverApi('dkan.test.service');
+
+    $this->assertArrayHasKey('service', $result);
+    $this->assertEquals('dkan.test.service', $result['service']['service_id']);
+    // No YAML in discover mode.
+    $this->assertArrayNotHasKey('yaml_definition', $result['service']);
+  }
+
+  public function testDiscoverApiWithMethod(): void {
+    $service = new DiscoverApiTestService();
+
+    $container = $this->createMock(ContainerInterface::class);
+    $container->method('has')->willReturn(TRUE);
+    $container->method('get')->willReturn($service);
+
+    $tools = $this->createTools($container);
+    $result = $tools->discoverApi('dkan.test.service', 'getWidget', 1);
+
+    $this->assertArrayHasKey('service', $result);
+    // Should have followed return type.
+    $this->assertArrayHasKey('return_types', $result);
+    $this->assertArrayHasKey(DiscoverApiTestWidget::class, $result['return_types']);
+
+    $widgetInfo = $result['return_types'][DiscoverApiTestWidget::class];
+    $methodNames = array_column($widgetInfo['methods'], 'name');
+    $this->assertContains('getName', $methodNames);
+  }
+
+  public function testDiscoverApiServiceNotFound(): void {
+    $container = $this->createMock(ContainerInterface::class);
+    $container->method('has')->willReturn(FALSE);
+
+    $tools = $this->createTools($container);
+    $result = $tools->discoverApi('nonexistent.service');
+
+    $this->assertArrayHasKey('error', $result);
+  }
+
   protected function findMethod(array $methods, string $name): ?array {
     foreach ($methods as $method) {
       if ($method['name'] === $name) {
@@ -334,6 +470,36 @@ class ClassInfoTestDouble implements ClassInfoTestInterface {
 
   public function ownMethod(string $input): array {
     return [];
+  }
+
+}
+
+/**
+ * Test double for discoverApi return type following.
+ */
+class DiscoverApiTestService {
+
+  public function getWidget(): DiscoverApiTestWidget {
+    return new DiscoverApiTestWidget();
+  }
+
+  public function getCount(): int {
+    return 0;
+  }
+
+}
+
+/**
+ * Return type class for discoverApi tests.
+ */
+class DiscoverApiTestWidget {
+
+  public function getName(): string {
+    return 'widget';
+  }
+
+  public function getValue(): int {
+    return 42;
   }
 
 }
