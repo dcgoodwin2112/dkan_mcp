@@ -104,3 +104,13 @@ services:
       - '@module_handler'
       - '@dkan.metastore.service'
       - '@dkan.datastore.service'
+
+  dkan_mcp.controller.mcp:
+    class: Drupal\dkan_mcp\Controller\McpController
+    arguments:
+      - '@dkan_mcp.server_factory'
+
+  dkan_mcp.cors_subscriber:
+    class: Drupal\dkan_mcp\EventSubscriber\McpCorsSubscriber
+    tags:
+      - { name: event_subscriber }
