@@ -503,9 +503,9 @@ class McpServerFactory {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
-      handler: fn(?string $module = NULL) => $this->eventTools->listEvents($module),
+      handler: fn(?string $module = NULL, bool $brief = FALSE) => $this->eventTools->listEvents($module, $brief),
       name: 'list_events',
-      description: 'List DKAN events with constant names, string values, and declaring classes. Filter by module (metastore, datastore, common).',
+      description: 'List DKAN events with constant names, string values, and declaring classes. Filter by module (metastore, datastore, common). Use brief=true for event name strings only.',
       annotations: $readOnly,
       inputSchema: [
         'type' => 'object',
@@ -514,12 +514,17 @@ class McpServerFactory {
             'type' => 'string',
             'description' => 'Module name to filter (e.g. metastore, datastore). Omit for all DKAN events.',
           ],
+          'brief' => [
+            'type' => 'boolean',
+            'description' => 'Return event name strings only (no constants, classes). Saves tokens.',
+            'default' => FALSE,
+          ],
         ],
       ],
     );
 
     $builder->addTool(
-      handler: fn(string $event_name) => $this->eventTools->getEventInfo($event_name),
+      handler: fn(string $event_name, ?string $fields = NULL) => $this->eventTools->getEventInfo($event_name, $fields),
       name: 'get_event_info',
       description: 'Get event details: declaring class, constant name, module, subscribers, event class (from subscriber type hints), event class methods, and dispatch payload type (the actual object passed to getData() at the dispatch site). For events using Drupal\common\Events\Event, the dispatch_payload field shows what getData() returns.',
       annotations: $readOnly,
@@ -529,6 +534,10 @@ class McpServerFactory {
           'event_name' => [
             'type' => 'string',
             'description' => 'Event name string (e.g. dkan_metastore_dataset_update)',
+          ],
+          'fields' => [
+            'type' => 'string',
+            'description' => 'Comma-separated field names to include (e.g. "constant,dispatch_payload"). Omit for all fields.',
           ],
         ],
         'required' => ['event_name'],
@@ -612,9 +621,9 @@ class McpServerFactory {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
-      handler: fn(?string $module = NULL) => $this->serviceTools->listServices($module),
+      handler: fn(?string $module = NULL, bool $brief = FALSE) => $this->serviceTools->listServices($module, $brief),
       name: 'list_services',
-      description: 'List DKAN service IDs with class names. Filter by module (metastore, datastore, harvest, common).',
+      description: 'List DKAN service IDs with class names. Filter by module (metastore, datastore, harvest, common). Use brief=true for ID-only list.',
       annotations: $readOnly,
       inputSchema: [
         'type' => 'object',
@@ -623,12 +632,17 @@ class McpServerFactory {
             'type' => 'string',
             'description' => 'Module name to filter (e.g. metastore, datastore). Omit for all DKAN services.',
           ],
+          'brief' => [
+            'type' => 'boolean',
+            'description' => 'Return service IDs only (no class names). Saves tokens.',
+            'default' => FALSE,
+          ],
         ],
       ],
     );
 
     $builder->addTool(
-      handler: fn(string $service_id) => $this->serviceTools->getServiceInfo($service_id),
+      handler: fn(string $service_id, ?string $methods = NULL, bool $include_yaml = TRUE) => $this->serviceTools->getServiceInfo($service_id, $methods, $include_yaml),
       name: 'get_service_info',
       description: 'Get service details: class name, constructor dependencies, public method signatures, and YAML definition (arguments, calls/setter injection, tags). Shows constructor params only — use get_class_info on the service class to find setter methods from calls: entries.',
       annotations: $readOnly,
@@ -636,13 +650,22 @@ class McpServerFactory {
         'type' => 'object',
         'properties' => [
           'service_id' => ['type' => 'string', 'description' => 'Drupal service ID (e.g. dkan.metastore.service)'],
+          'methods' => [
+            'type' => 'string',
+            'description' => 'Comma-separated glob patterns to filter methods (e.g. "get*", "get*,set*"). Omit for all methods.',
+          ],
+          'include_yaml' => [
+            'type' => 'boolean',
+            'description' => 'Include YAML service definition. Set false to save tokens when YAML is not needed.',
+            'default' => TRUE,
+          ],
         ],
         'required' => ['service_id'],
       ],
     );
 
     $builder->addTool(
-      handler: fn(string $class_name) => $this->serviceTools->getClassInfo($class_name),
+      handler: fn(string $class_name, ?string $methods = NULL) => $this->serviceTools->getClassInfo($class_name, $methods),
       name: 'get_class_info',
       description: 'Get the full public API of any PHP class or interface: parent class, interfaces, and all public methods with parameter types, return types, and declaring class. Use to follow return types from get_service_info.',
       annotations: $readOnly,
@@ -653,8 +676,35 @@ class McpServerFactory {
             'type' => 'string',
             'description' => 'Fully-qualified PHP class or interface name (e.g., Drupal\\datastore\\Storage\\DatabaseTable)',
           ],
+          'methods' => [
+            'type' => 'string',
+            'description' => 'Comma-separated glob patterns to filter methods (e.g. "get*", "query*,fetch*"). Omit for all methods.',
+          ],
         ],
         'required' => ['class_name'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $service_id, ?string $method = NULL, int $depth = 1) => $this->serviceTools->discoverApi($service_id, $method, $depth),
+      name: 'discover_api',
+      description: 'Discover a service\'s API and follow return types in one call. Returns service info (without YAML) plus class info for return types. Use instead of chaining get_service_info + get_class_info.',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'service_id' => ['type' => 'string', 'description' => 'Drupal service ID (e.g. dkan.metastore.service)'],
+          'method' => [
+            'type' => 'string',
+            'description' => 'Glob pattern to filter methods (e.g. "getStorage"). Return types of matching methods are followed.',
+          ],
+          'depth' => [
+            'type' => 'integer',
+            'description' => 'How many levels of return types to follow (1-2). Default 1.',
+            'default' => 1,
+          ],
+        ],
+        'required' => ['service_id'],
       ],
     );
   }
