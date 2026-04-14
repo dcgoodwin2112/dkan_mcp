@@ -1,0 +1,7 @@
+dkan_mcp.endpoint:
+  path: '/mcp'
+  defaults:
+    _controller: 'dkan_mcp.controller.mcp:handle'
+  methods: [POST, DELETE, OPTIONS]
+  requirements:
+    _permission: 'access content'

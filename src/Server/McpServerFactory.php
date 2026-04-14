@@ -17,6 +17,7 @@ use Drupal\dkan_mcp\Tools\WriteTools;
 use Mcp\Schema\ToolAnnotations;
 use Mcp\Server;
 use Mcp\Server\Builder;
+use Mcp\Server\Session\SessionStoreInterface;
 
 /**
  * Builds a configured MCP Server with all DKAN tools registered.
@@ -39,24 +40,49 @@ class McpServerFactory {
   ) {}
 
   /**
-   * Create a configured MCP Server with all tools registered.
+   * Tool group to registration method mapping.
    */
-  public function create(): Server {
+  private const TOOL_GROUPS = [
+    'metastore' => 'registerMetastoreTools',
+    'metastore_dev' => 'registerMetastoreDevTools',
+    'datastore' => 'registerDatastoreTools',
+    'search' => 'registerSearchTools',
+    'harvest_read' => 'registerHarvestReadTools',
+    'harvest_write' => 'registerHarvestWriteTools',
+    'service' => 'registerServiceTools',
+    'event' => 'registerEventTools',
+    'permission' => 'registerPermissionTools',
+    'resource' => 'registerResourceTools',
+    'write' => 'registerWriteTools',
+    'drupal' => 'registerDrupalTools',
+    'status' => 'registerStatusTools',
+    'log' => 'registerLogTools',
+  ];
+
+  /**
+   * Create a configured MCP Server.
+   *
+   * @param array|null $toolGroups
+   *   Tool groups to register. NULL registers all groups. Valid keys are
+   *   defined in self::TOOL_GROUPS.
+   * @param \Mcp\Server\Session\SessionStoreInterface|null $sessionStore
+   *   Session store for cross-request persistence. NULL uses in-memory
+   *   (suitable for stdio). Use FileSessionStore for HTTP transport.
+   */
+  public function create(?array $toolGroups = NULL, ?SessionStoreInterface $sessionStore = NULL): Server {
     $builder = Server::builder()
       ->setServerInfo('dkan', '1.0.0');
 
-    $this->registerMetastoreTools($builder);
-    $this->registerDatastoreTools($builder);
-    $this->registerSearchTools($builder);
-    $this->registerHarvestTools($builder);
-    $this->registerServiceTools($builder);
-    $this->registerEventTools($builder);
-    $this->registerPermissionTools($builder);
-    $this->registerResourceTools($builder);
-    $this->registerWriteTools($builder);
-    $this->registerDrupalTools($builder);
-    $this->registerStatusTools($builder);
-    $this->registerLogTools($builder);
+    if ($sessionStore) {
+      $builder->setSession($sessionStore);
+    }
+
+    $groups = $toolGroups ?? array_keys(self::TOOL_GROUPS);
+    foreach ($groups as $group) {
+      if (isset(self::TOOL_GROUPS[$group])) {
+        $this->{self::TOOL_GROUPS[$group]}($builder);
+      }
+    }
 
     return $builder->build();
   }
@@ -152,6 +178,14 @@ class McpServerFactory {
         'required' => ['schema_id'],
       ],
     );
+
+  }
+
+  /**
+   * Register metastore development tools.
+   */
+  protected function registerMetastoreDevTools(Builder $builder): void {
+    $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
       handler: fn(string $uuid) => $this->metastoreTools->getDatasetInfo($uuid),
@@ -394,7 +428,7 @@ class McpServerFactory {
   /**
    * Register harvest tools.
    */
-  protected function registerHarvestTools(Builder $builder): void {
+  protected function registerHarvestReadTools(Builder $builder): void {
     $readOnly = new ToolAnnotations(readOnlyHint: TRUE);
 
     $builder->addTool(
@@ -447,7 +481,12 @@ class McpServerFactory {
         'required' => ['plan_id'],
       ],
     );
+  }
 
+  /**
+   * Register harvest write tools.
+   */
+  protected function registerHarvestWriteTools(Builder $builder): void {
     $write = new ToolAnnotations(readOnlyHint: FALSE);
 
     $builder->addTool(
