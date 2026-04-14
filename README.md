@@ -85,7 +85,14 @@ done
 
 ## MCP Client Configuration
 
-### Claude Code
+Two transports are available:
+
+| Transport | Endpoint | Tools | Auth | Use Case |
+|---|---|---|---|---|
+| **stdio** | `drush dkan-mcp:serve` | All 52 | Drupal session (inherited) | Local development with Claude Code, Cursor, etc. |
+| **HTTP** | `POST /mcp` | 21 read-only | `access content` permission | Remote clients, browser-based tools, external agents |
+
+### stdio (all tools)
 
 Add a `.mcp.json` to the project root:
 
@@ -107,15 +114,28 @@ Or add via CLI:
 claude mcp add --transport stdio dkan --scope project -- ddev drush dkan-mcp:serve
 ```
 
-### Other MCP Clients
+### HTTP (read-only subset)
 
-Any client that supports stdio transport can connect. The server command is:
+The HTTP endpoint exposes 21 data-consumer tools at `/mcp` using the MCP [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) transport. All requests use JSON-RPC 2.0.
 
-```bash
-drush dkan-mcp:serve
+```json
+{
+  "mcpServers": {
+    "dkan": {
+      "type": "streamable-http",
+      "url": "https://dkan-site.ddev.site/mcp"
+    }
+  }
+}
 ```
 
-(Prefix with `ddev` if running inside a DDEV environment.)
+**Included tool groups**: metastore (7), datastore (6), search (1), harvest read (4), resource (1), status (2).
+
+**Excluded**: write tools, dev/admin introspection (services, events, permissions, Drupal internals, logs, `get_dataset_info`).
+
+**Session management**: the endpoint uses file-based sessions. Clients must send `Mcp-Session-Id` header (returned by `initialize`) on subsequent requests.
+
+**CORS**: enabled for all origins on the `/mcp` path.
 
 ## Tools
 
@@ -232,7 +252,9 @@ Datastore tools use **resource IDs** in the format `{identifier}__{version}` (e.
 
 ## Architecture
 
-- **Entry point**: `McpServeCommand` (Drush command) → `McpServerFactory` → `Mcp\Server` (stdio)
+- **Entry points**: `McpServeCommand` (Drush, stdio) and `McpController` (HTTP, Streamable HTTP transport) → `McpServerFactory` → `Mcp\Server`
+- **Tool subsetting**: `McpServerFactory::create()` accepts an optional `$toolGroups` array. `NULL` registers all 52 tools (stdio default). The HTTP controller passes a read-only subset of 21 tools.
+- **Autoloader isolation**: `McpAutoloaderTrait` (shared by Drush command and HTTP controller) loads the module's vendor autoloader and filters namespaces to prevent collisions with Drupal's vendor.
 - **Tool classes**: `MetastoreTools`, `DatastoreTools`, `SearchTools`, `HarvestTools`, `ServiceTools`, `EventTools`, `PermissionTools`, `ResourceTools`, `WriteTools`, `DrupalTools`, `StatusTools`, `LogTools` — Drupal services with injected DKAN dependencies
 - **opis/json-schema conflict**: DKAN requires opis v1, the MCP SDK requires v2. The SDK is installed in `dkan_mcp/vendor/` (not site-level). `SchemaValidatorShim` replaces the SDK's opis-dependent validator. The `post-install-cleanup` script removes opis packages from module vendor to prevent autoloader collisions.
 
