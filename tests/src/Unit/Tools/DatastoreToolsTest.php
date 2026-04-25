@@ -12,6 +12,7 @@ use Drupal\datastore\Service\Query;
 use Drupal\dkan_mcp\Tools\DatastoreTools;
 use Drupal\metastore\MetastoreService;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use RootedData\RootedJsonData;
 
 class DatastoreToolsTest extends TestCase {
@@ -28,7 +29,7 @@ class DatastoreToolsTest extends TestCase {
     $metastore = $metastore ?? $this->createMock(MetastoreService::class);
     $datasetInfo = $datasetInfo ?? $this->createMock(DatasetInfo::class);
     $database = $database ?? $this->createMock(Connection::class);
-    return new DatastoreTools($datastore, $query, $metastore, $datasetInfo, $database);
+    return new DatastoreTools($datastore, $query, $metastore, $datasetInfo, $database, new NullLogger());
   }
 
   public function testQueryDatastoreBasic(): void {

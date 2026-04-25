@@ -11,6 +11,7 @@ use Drupal\metastore\Exception\MissingObjectException;
 use Drupal\metastore\Exception\UnmodifiedObjectException;
 use Drupal\metastore\MetastoreService;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 class WriteToolsTest extends TestCase {
 
@@ -24,7 +25,7 @@ class WriteToolsTest extends TestCase {
     $handler = $handler ?? $this->createMock(ModuleHandlerInterface::class);
     $metastore = $metastore ?? $this->createMock(MetastoreService::class);
     $datastore = $datastore ?? $this->createMock(DatastoreService::class);
-    return new WriteTools($installer, $handler, $metastore, $datastore);
+    return new WriteTools($installer, $handler, $metastore, $datastore, new NullLogger());
   }
 
   public function testClearCache(): void {
@@ -114,7 +115,11 @@ class WriteToolsTest extends TestCase {
         return !empty($decoded->identifier)
           && $decoded->title === 'Test Data'
           && $decoded->distribution[0]->downloadURL === 'https://example.com/data.csv'
-          && $decoded->{'@type'} === 'dcat:Dataset';
+          && $decoded->{'@type'} === 'dcat:Dataset'
+          && !empty($decoded->modified)
+          && preg_match('/^\d{4}-\d{2}-\d{2}$/', $decoded->modified)
+          && is_array($decoded->keyword)
+          && count($decoded->keyword) >= 1;
       }))
       ->willReturn('test-uuid-1234');
     $metastore->expects($this->once())
