@@ -4,6 +4,7 @@ namespace Drupal\dkan_mcp\Controller;
 
 use Drupal\dkan_mcp\Server\McpAutoloaderTrait;
 use Drupal\dkan_mcp\Server\McpServerFactory;
+use Psr\Log\LoggerInterface;
 use GuzzleHttp\Psr7\HttpFactory;
 use Mcp\Server\Session\FileSessionStore;
 use Mcp\Server\Transport\StreamableHttpTransport;
@@ -36,6 +37,7 @@ class McpController {
 
   public function __construct(
     protected McpServerFactory $serverFactory,
+    protected LoggerInterface $logger,
   ) {}
 
   /**
@@ -44,29 +46,39 @@ class McpController {
   public function handle(Request $request): Response {
     $this->loadMcpAutoloader();
 
-    // Convert Symfony Request to PSR-7.
-    $psr17Factory = new HttpFactory();
-    $psrHttpFactory = new PsrHttpFactory($psr17Factory, $psr17Factory, $psr17Factory, $psr17Factory);
-    $psrRequest = $psrHttpFactory->createRequest($request);
+    try {
+      // Convert Symfony Request to PSR-7.
+      $psr17Factory = new HttpFactory();
+      $psrHttpFactory = new PsrHttpFactory($psr17Factory, $psr17Factory, $psr17Factory, $psr17Factory);
+      $psrRequest = $psrHttpFactory->createRequest($request);
 
-    // Use file-based sessions to persist state across HTTP requests.
-    $sessionDir = sys_get_temp_dir() . '/dkan_mcp_sessions';
-    $sessionStore = new FileSessionStore($sessionDir);
+      // Use file-based sessions to persist state across HTTP requests.
+      $sessionDir = sys_get_temp_dir() . '/dkan_mcp_sessions';
+      $sessionStore = new FileSessionStore($sessionDir);
 
-    // Create MCP server with HTTP tool subset and run with HTTP transport.
-    $server = $this->serverFactory->create(self::HTTP_TOOL_GROUPS, $sessionStore);
-    $transport = new StreamableHttpTransport(
-      request: $psrRequest,
-      responseFactory: $psr17Factory,
-      streamFactory: $psr17Factory,
-    );
+      // Create MCP server with HTTP tool subset and run with HTTP transport.
+      $server = $this->serverFactory->create(self::HTTP_TOOL_GROUPS, $sessionStore);
+      $transport = new StreamableHttpTransport(
+        request: $psrRequest,
+        responseFactory: $psr17Factory,
+        streamFactory: $psr17Factory,
+      );
 
-    /** @var \Psr\Http\Message\ResponseInterface $psrResponse */
-    $psrResponse = $server->run($transport);
+      /** @var \Psr\Http\Message\ResponseInterface $psrResponse */
+      $psrResponse = $server->run($transport);
 
-    // Convert PSR-7 Response back to Symfony.
-    $httpFoundationFactory = new HttpFoundationFactory();
-    return $httpFoundationFactory->createResponse($psrResponse);
+      // Convert PSR-7 Response back to Symfony.
+      $httpFoundationFactory = new HttpFoundationFactory();
+      return $httpFoundationFactory->createResponse($psrResponse);
+    }
+    catch (\Throwable $e) {
+      $this->logger->error('MCP HTTP handler error: @error', ['@error' => $e->getMessage()]);
+      return new Response(
+        json_encode(['jsonrpc' => '2.0', 'error' => ['code' => -32603, 'message' => 'Internal server error']]),
+        500,
+        ['Content-Type' => 'application/json']
+      );
+    }
   }
 
 }

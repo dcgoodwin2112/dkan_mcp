@@ -1,4 +1,8 @@
 services:
+  dkan_mcp.logger_channel:
+    parent: logger.channel_base
+    arguments: ['dkan_mcp']
+
   dkan_mcp.server_factory:
     class: Drupal\dkan_mcp\Server\McpServerFactory
     arguments:
@@ -29,6 +33,7 @@ services:
       - '@dkan.metastore.service'
       - '@dkan.common.dataset_info'
       - '@database'
+      - '@dkan_mcp.logger_channel'
 
   dkan_mcp.tools.search:
     class: Drupal\dkan_mcp\Tools\SearchTools
@@ -40,6 +45,7 @@ services:
     class: Drupal\dkan_mcp\Tools\HarvestTools
     arguments:
       - '@dkan.harvest.service'
+      - '@dkan_mcp.logger_channel'
 
   dkan_mcp.tools.service:
     class: Drupal\dkan_mcp\Tools\ServiceTools
@@ -104,11 +110,13 @@ services:
       - '@module_handler'
       - '@dkan.metastore.service'
       - '@dkan.datastore.service'
+      - '@dkan_mcp.logger_channel'
 
   dkan_mcp.controller.mcp:
     class: Drupal\dkan_mcp\Controller\McpController
     arguments:
       - '@dkan_mcp.server_factory'
+      - '@dkan_mcp.logger_channel'
 
   dkan_mcp.cors_subscriber:
     class: Drupal\dkan_mcp\EventSubscriber\McpCorsSubscriber
