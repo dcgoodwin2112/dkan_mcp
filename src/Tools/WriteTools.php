@@ -11,6 +11,7 @@ use Drupal\metastore\Exception\CannotChangeUuidException;
 use Drupal\metastore\Exception\MissingObjectException;
 use Drupal\metastore\Exception\UnmodifiedObjectException;
 use Drupal\metastore\MetastoreService;
+use Psr\Log\LoggerInterface;
 use RootedData\RootedJsonData;
 
 /**
@@ -23,6 +24,7 @@ class WriteTools {
     protected ModuleHandlerInterface $moduleHandler,
     protected MetastoreService $metastoreService,
     protected DatastoreService $datastoreService,
+    protected LoggerInterface $logger,
   ) {}
 
   /**
@@ -39,6 +41,7 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Cache clear failed: @error', ['@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -56,12 +59,14 @@ class WriteTools {
       }
 
       $this->moduleInstaller->install([$moduleName]);
+      $this->logger->notice('MCP: Module %module enabled.', ['%module' => $moduleName]);
       return [
         'status' => 'success',
         'message' => "Module '{$moduleName}' enabled. Restart the MCP server if the module registers new services or routes.",
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to enable module %module: @error', ['%module' => $moduleName, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -79,12 +84,14 @@ class WriteTools {
       }
 
       $this->moduleInstaller->uninstall([$moduleName]);
+      $this->logger->notice('MCP: Module %module uninstalled.', ['%module' => $moduleName]);
       return [
         'status' => 'success',
         'message' => "Module '{$moduleName}' uninstalled. Restart the MCP server if the module had registered services or routes.",
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to uninstall module %module: @error', ['%module' => $moduleName, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -100,6 +107,8 @@ class WriteTools {
         'title' => $title,
         'description' => "Test dataset: {$title}",
         'accessLevel' => 'public',
+        'modified' => date('Y-m-d'),
+        'keyword' => ['test'],
         'distribution' => [
           (object) [
             'downloadURL' => $downloadUrl,
@@ -113,6 +122,7 @@ class WriteTools {
       $identifier = $this->metastoreService->post('dataset', new RootedJsonData(json_encode($dataset)));
       $this->metastoreService->publish('dataset', $identifier);
 
+      $this->logger->notice('MCP: Test dataset @id created.', ['@id' => $identifier]);
       return [
         'status' => 'success',
         'identifier' => $identifier,
@@ -120,6 +130,7 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to create test dataset: @error', ['@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -154,6 +165,7 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Import failed for resource @id: @error', ['@id' => $resourceId, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -188,6 +200,7 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to update dataset @id: @error', ['@id' => $identifier, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -219,6 +232,7 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to patch dataset @id: @error', ['@id' => $identifier, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -229,6 +243,7 @@ class WriteTools {
   public function deleteDataset(string $identifier): array {
     try {
       $this->metastoreService->delete('dataset', $identifier);
+      $this->logger->notice('MCP: Dataset @id deleted.', ['@id' => $identifier]);
       return [
         'status' => 'success',
         'identifier' => $identifier,
@@ -243,6 +258,7 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to delete dataset @id: @error', ['@id' => $identifier, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -253,6 +269,7 @@ class WriteTools {
   public function publishDataset(string $identifier): array {
     try {
       $this->metastoreService->publish('dataset', $identifier);
+      $this->logger->notice('MCP: Dataset @id published.', ['@id' => $identifier]);
       return [
         'status' => 'success',
         'identifier' => $identifier,
@@ -267,6 +284,7 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to publish dataset @id: @error', ['@id' => $identifier, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -277,6 +295,7 @@ class WriteTools {
   public function unpublishDataset(string $identifier): array {
     try {
       $this->metastoreService->archive('dataset', $identifier);
+      $this->logger->notice('MCP: Dataset @id unpublished.', ['@id' => $identifier]);
       return [
         'status' => 'success',
         'identifier' => $identifier,
@@ -291,6 +310,7 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to unpublish dataset @id: @error', ['@id' => $identifier, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -302,6 +322,7 @@ class WriteTools {
     try {
       [$identifier, $version] = $this->parseResourceId($resourceId);
       $this->datastoreService->drop($identifier, $version);
+      $this->logger->notice('MCP: Datastore dropped for resource @id.', ['@id' => $resourceId]);
       return [
         'status' => 'success',
         'resource_id' => $resourceId,
@@ -309,6 +330,7 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to drop datastore for resource @id: @error', ['@id' => $resourceId, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }

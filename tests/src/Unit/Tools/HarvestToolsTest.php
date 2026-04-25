@@ -5,11 +5,12 @@ namespace Drupal\Tests\dkan_mcp\Unit\Tools;
 use Drupal\dkan_mcp\Tools\HarvestTools;
 use Drupal\harvest\HarvestService;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 class HarvestToolsTest extends TestCase {
 
   protected function createTools(HarvestService $harvest): HarvestTools {
-    return new HarvestTools($harvest);
+    return new HarvestTools($harvest, new NullLogger());
   }
 
   public function testListHarvestPlans(): void {

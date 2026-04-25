@@ -8,6 +8,7 @@ use Drupal\datastore\DatastoreService;
 use Drupal\datastore\Service\DatastoreQuery;
 use Drupal\datastore\Service\Query;
 use Drupal\metastore\MetastoreService;
+use Psr\Log\LoggerInterface;
 
 /**
  * MCP tools for DKAN datastore operations.
@@ -22,6 +23,7 @@ class DatastoreTools {
     protected MetastoreService $metastore,
     protected DatasetInfo $datasetInfo,
     protected Connection $database,
+    protected LoggerInterface $logger,
   ) {}
 
   /**
@@ -121,6 +123,7 @@ class DatastoreTools {
       ];
     }
     catch (\Exception $e) {
+      $this->logger->error('MCP: Datastore query failed for @id: @error', ['@id' => $resourceId, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -299,6 +302,7 @@ class DatastoreTools {
       ];
     }
     catch (\Exception $e) {
+      $this->logger->error('MCP: Datastore join query failed for @id: @error', ['@id' => $resourceId, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -516,6 +520,7 @@ class DatastoreTools {
       return $result;
     }
     catch (\Exception $e) {
+      $this->logger->error('MCP: Column search failed: @error', ['@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -581,6 +586,7 @@ class DatastoreTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Stats query failed for @id: @error', ['@id' => $resourceId, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }

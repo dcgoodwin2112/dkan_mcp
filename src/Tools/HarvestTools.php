@@ -3,6 +3,7 @@
 namespace Drupal\dkan_mcp\Tools;
 
 use Drupal\harvest\HarvestService;
+use Psr\Log\LoggerInterface;
 
 /**
  * MCP tools for DKAN harvest operations.
@@ -11,6 +12,7 @@ class HarvestTools {
 
   public function __construct(
     protected HarvestService $harvest,
+    protected LoggerInterface $logger,
   ) {}
 
   /**
@@ -81,6 +83,7 @@ class HarvestTools {
     try {
       $this->harvest->registerHarvest($decoded);
       $planId = $decoded->identifier ?? 'unknown';
+      $this->logger->notice('MCP: Harvest plan @id registered.', ['@id' => $planId]);
       return [
         'status' => 'success',
         'plan_id' => $planId,
@@ -88,6 +91,7 @@ class HarvestTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to register harvest: @error', ['@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -102,6 +106,7 @@ class HarvestTools {
 
     try {
       $result = $this->harvest->runHarvest($planId);
+      $this->logger->notice('MCP: Harvest plan @id executed.', ['@id' => $planId]);
       return [
         'status' => 'success',
         'plan_id' => $planId,
@@ -110,6 +115,7 @@ class HarvestTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to run harvest @id: @error', ['@id' => $planId, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
@@ -128,6 +134,7 @@ class HarvestTools {
 
     try {
       $this->harvest->deregisterHarvest($planId);
+      $this->logger->notice('MCP: Harvest plan @id deregistered.', ['@id' => $planId]);
       return [
         'status' => 'success',
         'plan_id' => $planId,
@@ -135,6 +142,7 @@ class HarvestTools {
       ];
     }
     catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to deregister harvest @id: @error', ['@id' => $planId, '@error' => $e->getMessage()]);
       return ['error' => $e->getMessage()];
     }
   }
