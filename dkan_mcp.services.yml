@@ -6,9 +6,9 @@ services:
   dkan_mcp.server_factory:
     class: Drupal\dkan_mcp\Server\McpServerFactory
     arguments:
-      - '@dkan_mcp.tools.metastore'
-      - '@dkan_mcp.tools.datastore'
-      - '@dkan_mcp.tools.search'
+      - '@dkan_query_tools.metastore'
+      - '@dkan_query_tools.datastore'
+      - '@dkan_query_tools.search'
       - '@dkan_mcp.tools.harvest'
       - '@dkan_mcp.tools.service'
       - '@dkan_mcp.tools.event'
@@ -18,28 +18,6 @@ services:
       - '@dkan_mcp.tools.drupal'
       - '@dkan_mcp.tools.status'
       - '@dkan_mcp.tools.log'
-
-  dkan_mcp.tools.metastore:
-    class: Drupal\dkan_mcp\Tools\MetastoreTools
-    arguments:
-      - '@dkan.metastore.service'
-      - '@dkan.common.dataset_info'
-
-  dkan_mcp.tools.datastore:
-    class: Drupal\dkan_mcp\Tools\DatastoreTools
-    arguments:
-      - '@dkan.datastore.service'
-      - '@dkan.datastore.query'
-      - '@dkan.metastore.service'
-      - '@dkan.common.dataset_info'
-      - '@database'
-      - '@dkan_mcp.logger_channel'
-
-  dkan_mcp.tools.search:
-    class: Drupal\dkan_mcp\Tools\SearchTools
-    arguments:
-      - '@http_client'
-      - '@request_stack'
 
   dkan_mcp.tools.harvest:
     class: Drupal\dkan_mcp\Tools\HarvestTools
