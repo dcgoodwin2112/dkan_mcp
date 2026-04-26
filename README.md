@@ -32,11 +32,30 @@ See [docs/tool-suite-review.md](docs/tool-suite-review.md) for the tool suite as
 
 - Drupal 10.2+ or 11
 - DKAN (metastore, datastore, harvest modules enabled)
+- `dkan_query_tools` module enabled (provides the catalog/datastore/search tool classes shared with `dkan_nl_query` and `dkan_drupal_ai_query`)
 - MCP SDK installed in module vendor (see Installation)
 
 ## Installation
 
-1. Add as a Composer dependency (path repo or VCS):
+1. Install the `dkan_query_tools` module first — it provides the catalog/datastore/search tool classes that dkan_mcp injects into its MCP tools. See [dkan_query_tools README](../dkan_query_tools/README.md) for full instructions; in short:
+
+```json
+{
+  "repositories": {
+    "dkan_query_tools": { "type": "vcs", "url": "https://github.com/dcgoodwin2112/dkan_query_tools.git" }
+  },
+  "require": {
+    "dcgoodwin2112/dkan_query_tools": "dev-main"
+  }
+}
+```
+
+```bash
+composer update dcgoodwin2112/dkan_query_tools
+drush en dkan_query_tools
+```
+
+2. Add dkan_mcp as a Composer dependency:
 
 ```json
 {
@@ -49,17 +68,19 @@ See [docs/tool-suite-review.md](docs/tool-suite-review.md) for the tool suite as
 }
 ```
 
-2. Install the MCP SDK in the module's own vendor directory (required due to an `opis/json-schema` version conflict with DKAN):
+3. Install the MCP SDK in the module's own vendor directory (required due to an `opis/json-schema` version conflict with DKAN):
 
 ```bash
 cd web/modules/custom/dkan_mcp && composer require mcp/sdk:^0.4 && composer run-script post-install-cleanup
 ```
 
-3. Enable the module:
+4. Enable the module:
 
 ```bash
 drush en dkan_mcp
 ```
+
+Drupal will auto-enable `dkan_query_tools` as a dependency if it isn't already enabled, but the Composer step in (1) must happen first so the package is on disk.
 
 ## Claude Code Commands
 
@@ -255,7 +276,10 @@ Datastore tools use **resource IDs** in the format `{identifier}__{version}` (e.
 - **Entry points**: `McpServeCommand` (Drush, stdio) and `McpController` (HTTP, Streamable HTTP transport) → `McpServerFactory` → `Mcp\Server`
 - **Tool subsetting**: `McpServerFactory::create()` accepts an optional `$toolGroups` array. `NULL` registers all 52 tools (stdio default). The HTTP controller passes a read-only subset of 21 tools.
 - **Autoloader isolation**: `McpAutoloaderTrait` (shared by Drush command and HTTP controller) loads the module's vendor autoloader and filters namespaces to prevent collisions with Drupal's vendor.
-- **Tool classes**: `MetastoreTools`, `DatastoreTools`, `SearchTools`, `HarvestTools`, `ServiceTools`, `EventTools`, `PermissionTools`, `ResourceTools`, `WriteTools`, `DrupalTools`, `StatusTools`, `LogTools` — Drupal services with injected DKAN dependencies
+- **Tool classes**:
+  - From `dkan_query_tools` (shared with `dkan_nl_query` and `dkan_drupal_ai_query`): `MetastoreTools`, `DatastoreTools`, `SearchTools`
+  - dkan_mcp-specific: `HarvestTools`, `ServiceTools`, `EventTools`, `PermissionTools`, `ResourceTools`, `WriteTools`, `DrupalTools`, `StatusTools`, `LogTools`
+  - All are Drupal services with injected DKAN dependencies.
 - **opis/json-schema conflict**: DKAN requires opis v1, the MCP SDK requires v2. The SDK is installed in `dkan_mcp/vendor/` (not site-level). `SchemaValidatorShim` replaces the SDK's opis-dependent validator. The `post-install-cleanup` script removes opis packages from module vendor to prevent autoloader collisions.
 
 ## Development
@@ -268,6 +292,8 @@ cd dkan_mcp && vendor/bin/phpunit
 
 ### Adding a Tool
 
-1. Add a method to the appropriate tool class (`src/Tools/`)
+1. Add a method to the appropriate tool class:
+   - For catalog/metastore/datastore/search operations, edit the relevant class in `dkan_query_tools/src/Tool/` (shared with other consumers)
+   - For MCP-server-specific tools (harvest, write, drupal introspection, etc.), edit `dkan_mcp/src/Tools/`
 2. Register it in `McpServerFactory::register*Tools()`
-3. Add a test in `tests/src/Unit/`
+3. Add a test in the corresponding module's `tests/src/Unit/`

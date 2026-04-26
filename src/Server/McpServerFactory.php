@@ -2,13 +2,13 @@
 
 namespace Drupal\dkan_mcp\Server;
 
-use Drupal\dkan_mcp\Tools\DatastoreTools;
+use Drupal\dkan_query_tools\Tool\DatastoreTools;
 use Drupal\dkan_mcp\Tools\EventTools;
 use Drupal\dkan_mcp\Tools\HarvestTools;
 use Drupal\dkan_mcp\Tools\PermissionTools;
-use Drupal\dkan_mcp\Tools\MetastoreTools;
+use Drupal\dkan_query_tools\Tool\MetastoreTools;
 use Drupal\dkan_mcp\Tools\ResourceTools;
-use Drupal\dkan_mcp\Tools\SearchTools;
+use Drupal\dkan_query_tools\Tool\SearchTools;
 use Drupal\dkan_mcp\Tools\ServiceTools;
 use Drupal\dkan_mcp\Tools\DrupalTools;
 use Drupal\dkan_mcp\Tools\StatusTools;
