@@ -128,24 +128,26 @@ $builder->addTool(
 
 The handler closures serve as the binding layer — they receive SDK-validated parameters and forward them to tool class methods with PHP type hints.
 
-### Tool Classes (`src/Tools/*.php`)
+### Tool Classes
 
 12 plain PHP classes, each registered as a Drupal service with constructor-injected dependencies. No base class or shared interface — each tool class is a standalone adapter between MCP and DKAN/Drupal services.
 
-| Service ID | Class | DKAN/Drupal Dependencies |
-|---|---|---|
-| `dkan_mcp.tools.metastore` | `MetastoreTools` | `MetastoreService`, `DatasetInfo` |
-| `dkan_mcp.tools.datastore` | `DatastoreTools` | `DatastoreService`, `Query` |
-| `dkan_mcp.tools.search` | `SearchTools` | `http_client`, `request_stack` |
-| `dkan_mcp.tools.harvest` | `HarvestTools` | `HarvestService` |
-| `dkan_mcp.tools.service` | `ServiceTools` | `service_container`, `module_handler` |
-| `dkan_mcp.tools.event` | `EventTools` | `service_container`, `event_dispatcher` |
-| `dkan_mcp.tools.permission` | `PermissionTools` | `user.permissions`, `router.route_provider`, `entity_type.manager`, `module_handler` |
-| `dkan_mcp.tools.resource` | `ResourceTools` | `MetastoreService`, `ResourceMapper`, `DatastoreService`, `DatasetInfo` |
-| `dkan_mcp.tools.write` | `WriteTools` | `module_installer`, `module_handler`, `MetastoreService`, `DatastoreService` |
-| `dkan_mcp.tools.drupal` | `DrupalTools` | `entity_type.manager`, `entity_field.manager`, `entity_type.bundle.info`, `module_handler`, `extension.list.module`, `config.factory`, `router.route_provider`, `service_container` |
-| `dkan_mcp.tools.status` | `StatusTools` | `MetastoreService`, `DatasetInfo`, `HarvestService`, `module_handler`, `extension.list.module` |
-| `dkan_mcp.tools.log` | `LogTools` | `database` |
+The first three classes live in the **`dkan_query_tools`** module (shared with `dkan_nl_query` and `dkan_drupal_ai_query`); the remainder live in `dkan_mcp/src/Tools/`.
+
+| Service ID | Class | Source Module | DKAN/Drupal Dependencies |
+|---|---|---|---|
+| `dkan_query_tools.metastore` | `MetastoreTools` | dkan_query_tools | `MetastoreService`, `DatasetInfo` |
+| `dkan_query_tools.datastore` | `DatastoreTools` | dkan_query_tools | `DatastoreService`, `Query`, `MetastoreService`, `DatasetInfo`, `database`, logger |
+| `dkan_query_tools.search` | `SearchTools` | dkan_query_tools | `http_client`, `request_stack` |
+| `dkan_mcp.tools.harvest` | `HarvestTools` | dkan_mcp | `HarvestService` |
+| `dkan_mcp.tools.service` | `ServiceTools` | dkan_mcp | `service_container`, `module_handler` |
+| `dkan_mcp.tools.event` | `EventTools` | dkan_mcp | `service_container`, `event_dispatcher` |
+| `dkan_mcp.tools.permission` | `PermissionTools` | dkan_mcp | `user.permissions`, `router.route_provider`, `entity_type.manager`, `module_handler` |
+| `dkan_mcp.tools.resource` | `ResourceTools` | dkan_mcp | `MetastoreService`, `ResourceMapper`, `DatastoreService`, `DatasetInfo` |
+| `dkan_mcp.tools.write` | `WriteTools` | dkan_mcp | `module_installer`, `module_handler`, `MetastoreService`, `DatastoreService` |
+| `dkan_mcp.tools.drupal` | `DrupalTools` | dkan_mcp | `entity_type.manager`, `entity_field.manager`, `entity_type.bundle.info`, `module_handler`, `extension.list.module`, `config.factory`, `router.route_provider`, `service_container` |
+| `dkan_mcp.tools.status` | `StatusTools` | dkan_mcp | `MetastoreService`, `DatasetInfo`, `HarvestService`, `module_handler`, `extension.list.module` |
+| `dkan_mcp.tools.log` | `LogTools` | dkan_mcp | `database` |
 
 ### Tool class implementation pattern
 

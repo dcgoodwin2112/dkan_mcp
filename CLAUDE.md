@@ -268,19 +268,26 @@ For full per-tool parameter schemas and response shapes, see [docs/tools.md](doc
 
 ```bash
 cd dkan_mcp && vendor/bin/phpunit
-cd dkan_mcp && vendor/bin/phpunit tests/src/Unit/Tools/DatastoreToolsTest.php
+cd dkan_mcp && vendor/bin/phpunit tests/src/Unit/Tools/HarvestToolsTest.php
 ```
 
-Tests use standalone stubs in `tests/stubs/` (no Drupal bootstrap). Stub classes replicate DKAN service interfaces with minimal implementations.
+Tests use standalone stubs in `tests/stubs/` (no Drupal bootstrap). Stub classes replicate DKAN service interfaces with minimal implementations. Tests for the shared `MetastoreTools`, `DatastoreTools`, and `SearchTools` classes live in the `dkan_query_tools` module — run `cd web/modules/custom/dkan_query_tools && vendor/bin/phpunit` for those.
 
 ### Adding a Tool
 
-1. Add a public method to the appropriate tool class in `src/Tools/` (or create a new tool class if it doesn't fit existing categories)
-2. Register it in `McpServerFactory` in the corresponding `register*Tools()` method using `$builder->addTool()` — define `handler`, `name`, `description`, `annotations` (`$readOnly` for read tools, `new ToolAnnotations(readOnlyHint: FALSE)` for write tools), and `inputSchema`
-3. Add a unit test in `tests/src/Unit/Tools/`
+**For catalog/metastore/datastore/search operations**, edit the relevant class in the **`dkan_query_tools`** module (`MetastoreTools`, `DatastoreTools`, `SearchTools`) — that's the shared library consumed by dkan_mcp, dkan_nl_query, and dkan_drupal_ai_query. Add the unit test in `dkan_query_tools/tests/src/Unit/Tool/`.
+
+**For MCP-server-specific operations** (harvest, write, drupal introspection, service/event/permission discovery, status, logs):
+
+1. Add a public method to the appropriate tool class in `dkan_mcp/src/Tools/` (or create a new tool class if it doesn't fit existing categories)
+2. Add a unit test in `dkan_mcp/tests/src/Unit/Tools/`
+
+**Then for either case**, register the new method as an MCP tool:
+
+3. Register it in `McpServerFactory` in the corresponding `register*Tools()` method using `$builder->addTool()` — define `handler`, `name`, `description`, `annotations` (`$readOnly` for read tools, `new ToolAnnotations(readOnlyHint: FALSE)` for write tools), and `inputSchema`
 4. If the tool should be available over HTTP, ensure it's in a tool group listed in `McpController::HTTP_TOOL_GROUPS`
 
-If adding a new tool class: create it as a Drupal service in `dkan_mcp.services.yml`, inject it into `McpServerFactory`, add a `register*Tools()` method, and add the group key to `McpServerFactory::TOOL_GROUPS`.
+If adding a new dkan_mcp-specific tool class: create it as a Drupal service in `dkan_mcp.services.yml`, inject it into `McpServerFactory`, add a `register*Tools()` method, and add the group key to `McpServerFactory::TOOL_GROUPS`.
 
 ### opis/json-schema Conflict
 

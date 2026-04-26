@@ -7,3 +7,4 @@ dependencies:
   - dkan:metastore
   - dkan:datastore
   - dkan:harvest
+  - dkan_query_tools:dkan_query_tools
