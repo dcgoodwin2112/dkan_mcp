@@ -915,6 +915,52 @@ class McpServerFactory {
         'required' => ['resource_id'],
       ],
     );
+
+    $builder->addTool(
+      handler: fn(string $schema_id, string $metadata) => $this->writeTools->postMetastoreItem($schema_id, $metadata),
+      name: 'post_metastore_item',
+      description: 'Create a metastore item under any schema (e.g., data-dictionary, distribution, theme, keyword). For datasets prefer create_test_dataset or update_dataset. Metadata must be a JSON string with the schema-required fields. Returns the new identifier. Use list_schemas + get_schema to discover required fields.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'schema_id' => [
+            'type' => 'string',
+            'description' => 'Metastore schema ID (e.g., data-dictionary, distribution, theme, keyword)',
+          ],
+          'metadata' => [
+            'type' => 'string',
+            'description' => 'Complete item metadata as a JSON object string. Must include identifier and the schema\'s required fields.',
+          ],
+        ],
+        'required' => ['schema_id', 'metadata'],
+      ],
+    );
+
+    $builder->addTool(
+      handler: fn(string $schema_id, string $identifier, string $metadata) => $this->writeTools->patchMetastoreItem($schema_id, $identifier, $metadata),
+      name: 'patch_metastore_item',
+      description: 'Partial update of any metastore item via JSON Merge Patch (RFC 7396). For datasets prefer patch_dataset. Send only the fields to change as a JSON object string.',
+      annotations: $write,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'schema_id' => [
+            'type' => 'string',
+            'description' => 'Metastore schema ID (e.g., data-dictionary, distribution, theme, keyword)',
+          ],
+          'identifier' => [
+            'type' => 'string',
+            'description' => 'Item identifier (UUID)',
+          ],
+          'metadata' => [
+            'type' => 'string',
+            'description' => 'JSON object string with only the fields to change',
+          ],
+        ],
+        'required' => ['schema_id', 'identifier', 'metadata'],
+      ],
+    );
   }
 
   /**

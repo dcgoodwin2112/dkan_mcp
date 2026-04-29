@@ -552,6 +552,38 @@ Partial update via JSON Merge Patch (RFC 7396).
 - Only send fields you want to change; omitted fields are preserved
 - Validates JSON is an object
 
+### `post_metastore_item`
+
+Create a metastore item under any schema (e.g., `data-dictionary`, `distribution`, `theme`, `keyword`).
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema_id` | string | yes | -- | Metastore schema ID (e.g., `data-dictionary`) |
+| `metadata` | string | yes | -- | Item metadata as JSON object string. Must include `identifier` and the schema's required fields. |
+
+**Response:** `{status: "success", schema_id, identifier, message}`, `{status: "already_exists", schema_id, message}`, or `{error}`
+
+**Notes:**
+- For datasets prefer `create_test_dataset` or `update_dataset`
+- Use `list_schemas` and `get_schema(schema_id)` to discover required fields
+- For data dictionaries, body is `{identifier, data: {title, fields: [{name, type, title?, description?}]}}`. Link to a distribution via `patch_dataset` setting `distribution[i].data.describedBy` (URL to the dictionary item) and `describedByType: "application/vnd.tableschema+json"`. Requires `metastore.settings.data_dictionary_mode = "reference"`.
+
+### `patch_metastore_item`
+
+Partial update of any metastore item via JSON Merge Patch (RFC 7396).
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema_id` | string | yes | -- | Metastore schema ID |
+| `identifier` | string | yes | -- | Item identifier (UUID) |
+| `metadata` | string | yes | -- | JSON object with only fields to change |
+
+**Response:** `{status: "success", schema_id, identifier, message}` or `{status: "not_found", ...}`
+
+**Notes:**
+- For datasets prefer `patch_dataset`
+- Only send fields you want to change; omitted fields are preserved
+
 ### `delete_dataset`
 
 Delete a dataset and cascade-delete distributions and datastore tables.
