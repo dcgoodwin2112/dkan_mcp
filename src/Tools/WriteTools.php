@@ -8,6 +8,7 @@ use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Extension\ModuleInstallerInterface;
 use Drupal\datastore\DatastoreService;
 use Drupal\metastore\Exception\CannotChangeUuidException;
+use Drupal\metastore\Exception\ExistingObjectException;
 use Drupal\metastore\Exception\MissingObjectException;
 use Drupal\metastore\Exception\UnmodifiedObjectException;
 use Drupal\metastore\MetastoreService;
@@ -311,6 +312,84 @@ class WriteTools {
     }
     catch (\Throwable $e) {
       $this->logger->error('MCP: Failed to unpublish dataset @id: @error', ['@id' => $identifier, '@error' => $e->getMessage()]);
+      return ['error' => $e->getMessage()];
+    }
+  }
+
+  /**
+   * Create a metastore item under any schema (dataset, data-dictionary, etc.).
+   */
+  public function postMetastoreItem(string $schemaId, string $metadata): array {
+    if (!is_object(json_decode($metadata))) {
+      $message = json_last_error() !== JSON_ERROR_NONE
+        ? 'Invalid JSON: ' . json_last_error_msg()
+        : 'Metadata must be a JSON object, not a scalar or array.';
+      return ['error' => $message];
+    }
+
+    try {
+      $identifier = $this->metastoreService->post($schemaId, new RootedJsonData($metadata));
+      $this->logger->notice('MCP: Metastore item @schema/@id created.', [
+        '@schema' => $schemaId,
+        '@id' => $identifier,
+      ]);
+      return [
+        'status' => 'success',
+        'schema_id' => $schemaId,
+        'identifier' => $identifier,
+        'message' => "Created {$schemaId} item with identifier {$identifier}.",
+      ];
+    }
+    catch (ExistingObjectException $e) {
+      return [
+        'status' => 'already_exists',
+        'schema_id' => $schemaId,
+        'message' => $e->getMessage(),
+      ];
+    }
+    catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to post @schema item: @error', [
+        '@schema' => $schemaId,
+        '@error' => $e->getMessage(),
+      ]);
+      return ['error' => $e->getMessage()];
+    }
+  }
+
+  /**
+   * Partial update of any metastore item via JSON Merge Patch (RFC 7396).
+   */
+  public function patchMetastoreItem(string $schemaId, string $identifier, string $metadata): array {
+    if (!is_object(json_decode($metadata))) {
+      $message = json_last_error() !== JSON_ERROR_NONE
+        ? 'Invalid JSON: ' . json_last_error_msg()
+        : 'Metadata must be a JSON object, not a scalar or array.';
+      return ['error' => $message];
+    }
+
+    try {
+      $this->metastoreService->patch($schemaId, $identifier, $metadata);
+      return [
+        'status' => 'success',
+        'schema_id' => $schemaId,
+        'identifier' => $identifier,
+        'message' => "Patched {$schemaId} item {$identifier}.",
+      ];
+    }
+    catch (MissingObjectException $e) {
+      return [
+        'status' => 'not_found',
+        'schema_id' => $schemaId,
+        'identifier' => $identifier,
+        'message' => "{$schemaId} item '{$identifier}' not found.",
+      ];
+    }
+    catch (\Throwable $e) {
+      $this->logger->error('MCP: Failed to patch @schema/@id: @error', [
+        '@schema' => $schemaId,
+        '@id' => $identifier,
+        '@error' => $e->getMessage(),
+      ]);
       return ['error' => $e->getMessage()];
     }
   }
