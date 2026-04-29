@@ -7,6 +7,7 @@ use Drupal\Core\Extension\ModuleInstallerInterface;
 use Drupal\datastore\DatastoreService;
 use Drupal\dkan_mcp\Tools\WriteTools;
 use Drupal\metastore\Exception\CannotChangeUuidException;
+use Drupal\metastore\Exception\ExistingObjectException;
 use Drupal\metastore\Exception\MissingObjectException;
 use Drupal\metastore\Exception\UnmodifiedObjectException;
 use Drupal\metastore\MetastoreService;
@@ -436,6 +437,111 @@ class WriteToolsTest extends TestCase {
 
     $this->assertArrayHasKey('error', $result);
     $this->assertStringContainsString('Table not found', $result['error']);
+  }
+
+  public function testPostMetastoreItemSuccess(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->once())
+      ->method('post')
+      ->with('data-dictionary', $this->callback(function ($data) {
+        $decoded = json_decode((string) $data);
+        return $decoded->identifier === 'dict-uuid-1'
+          && $decoded->data->title === 'Test Dictionary';
+      }))
+      ->willReturn('dict-uuid-1');
+
+    $tools = $this->createTools(metastore: $metastore);
+    $json = '{"identifier":"dict-uuid-1","data":{"title":"Test Dictionary","fields":[{"name":"col","type":"string"}]}}';
+    $result = $tools->postMetastoreItem('data-dictionary', $json);
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertEquals('data-dictionary', $result['schema_id']);
+    $this->assertEquals('dict-uuid-1', $result['identifier']);
+  }
+
+  public function testPostMetastoreItemAlreadyExists(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('post')
+      ->willThrowException(new ExistingObjectException('data-dictionary/dict-uuid-1 already exists.'));
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->postMetastoreItem('data-dictionary', '{"identifier":"dict-uuid-1","data":{"title":"x"}}');
+
+    $this->assertEquals('already_exists', $result['status']);
+    $this->assertEquals('data-dictionary', $result['schema_id']);
+  }
+
+  public function testPostMetastoreItemInvalidJson(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->never())->method('post');
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->postMetastoreItem('data-dictionary', '{not json}');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Invalid JSON', $result['error']);
+  }
+
+  public function testPostMetastoreItemNonObjectJson(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->never())->method('post');
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->postMetastoreItem('data-dictionary', '[1,2,3]');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('JSON object', $result['error']);
+  }
+
+  public function testPostMetastoreItemError(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('post')
+      ->willThrowException(new \Exception('Schema validation failed'));
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->postMetastoreItem('data-dictionary', '{"identifier":"x","data":{}}');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('Schema validation failed', $result['error']);
+  }
+
+  public function testPatchMetastoreItemSuccess(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->once())
+      ->method('patch')
+      ->with('data-dictionary', 'dict-uuid-1', '{"data":{"title":"Updated"}}')
+      ->willReturn('dict-uuid-1');
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->patchMetastoreItem('data-dictionary', 'dict-uuid-1', '{"data":{"title":"Updated"}}');
+
+    $this->assertEquals('success', $result['status']);
+    $this->assertEquals('data-dictionary', $result['schema_id']);
+    $this->assertEquals('dict-uuid-1', $result['identifier']);
+  }
+
+  public function testPatchMetastoreItemNotFound(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->method('patch')
+      ->willThrowException(new MissingObjectException('Not found'));
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->patchMetastoreItem('data-dictionary', 'missing', '{"data":{"title":"x"}}');
+
+    $this->assertEquals('not_found', $result['status']);
+    $this->assertEquals('data-dictionary', $result['schema_id']);
+    $this->assertEquals('missing', $result['identifier']);
+  }
+
+  public function testPatchMetastoreItemNonObjectJson(): void {
+    $metastore = $this->createMock(MetastoreService::class);
+    $metastore->expects($this->never())->method('patch');
+
+    $tools = $this->createTools(metastore: $metastore);
+    $result = $tools->patchMetastoreItem('data-dictionary', 'dict-uuid-1', '"scalar"');
+
+    $this->assertArrayHasKey('error', $result);
+    $this->assertStringContainsString('JSON object', $result['error']);
   }
 
 }
