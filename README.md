@@ -1,6 +1,6 @@
 # DKAN MCP
 
-MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 52 tools: 38 read-only for discovery and querying, 14 write tools for cache management, module operations, dataset lifecycle, datastore management, harvest operations, and imports.
+MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 54 tools: 38 read-only for discovery and querying, 16 write tools for cache management, module operations, dataset lifecycle, generic metastore item management (e.g., data dictionaries), datastore management, harvest operations, and imports.
 
 ## Why This Module Exists
 
@@ -235,6 +235,8 @@ Tools are organized by platform scope:
 | `import_resource` | `resource_id`, `deferred?` | Trigger datastore import for a resource |
 | `update_dataset` | `identifier`, `metadata` | Full replacement of dataset metadata (PUT semantics) |
 | `patch_dataset` | `identifier`, `metadata` | Partial update via JSON Merge Patch (RFC 7396) |
+| `post_metastore_item` | `schema_id`, `metadata` | Create a metastore item under any schema (data-dictionary, distribution, theme, keyword, etc.) |
+| `patch_metastore_item` | `schema_id`, `identifier`, `metadata` | Partial update of any metastore item via JSON Merge Patch |
 | `delete_dataset` | `identifier` | Delete a dataset and cascade-delete distributions and datastore tables |
 | `publish_dataset` | `identifier` | Publish a dataset to make it publicly visible |
 | `unpublish_dataset` | `identifier` | Unpublish (archive) a dataset |
@@ -274,7 +276,7 @@ Datastore tools use **resource IDs** in the format `{identifier}__{version}` (e.
 ## Architecture
 
 - **Entry points**: `McpServeCommand` (Drush, stdio) and `McpController` (HTTP, Streamable HTTP transport) → `McpServerFactory` → `Mcp\Server`
-- **Tool subsetting**: `McpServerFactory::create()` accepts an optional `$toolGroups` array. `NULL` registers all 52 tools (stdio default). The HTTP controller passes a read-only subset of 21 tools.
+- **Tool subsetting**: `McpServerFactory::create()` accepts an optional `$toolGroups` array. `NULL` registers all 54 tools (stdio default). The HTTP controller passes a read-only subset of 21 tools.
 - **Autoloader isolation**: `McpAutoloaderTrait` (shared by Drush command and HTTP controller) loads the module's vendor autoloader and filters namespaces to prevent collisions with Drupal's vendor.
 - **Tool classes**:
   - From `dkan_query_tools` (shared with `dkan_nl_query` and `dkan_drupal_ai_query`): `MetastoreTools`, `DatastoreTools`, `SearchTools`

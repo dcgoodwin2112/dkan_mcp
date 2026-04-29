@@ -10,3 +10,5 @@ class CannotChangeUuidException extends \Exception {}
 class UnmodifiedObjectException extends \Exception {}
 
 class MissingObjectException extends \Exception {}
+
+class ExistingObjectException extends \Exception {}
