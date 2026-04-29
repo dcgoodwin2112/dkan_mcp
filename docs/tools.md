@@ -92,6 +92,22 @@ Get a JSON Schema definition by schema ID.
 - Use `list_schemas` to discover available schema IDs
 - Returns the full JSON Schema object including property definitions, types, and validation constraints
 
+### `get_data_dictionary`
+
+Get the data dictionary linked to a dataset or distribution.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `dataset_or_resource_id` | string | yes | -- | Dataset UUID or resource ID (`identifier__version`) |
+
+**Response:** `{dictionaries: {<resource_id>: {identifier, url, title, fields: [{name, type, title?, description?}]}}}` or `{error}`
+
+**Notes:**
+- A dataset UUID returns dictionaries for all linked distributions; a resource ID returns the single dictionary for that distribution.
+- `get_datastore_schema` already merges per-column dictionary fields into its column response. Use this tool when you need the full dictionary (including fields the datastore doesn't expose) or when the distribution has not been imported.
+- Returns `error` when the dataset has no linked dictionary, the resource cannot be matched to any distribution, or the linked dictionary item cannot be fetched.
+- Walks up to 200 datasets when looking up by `resource_id`. Datasets beyond that cap will not be matched.
+
 ### `get_dataset_info`
 
 Get aggregated dataset lineage: distributions, resources, import status, perspectives.
@@ -174,11 +190,13 @@ Get column names and types for a datastore resource.
 |---|---|---|---|---|
 | `resource_id` | string | yes | -- | Resource ID (`identifier__version`) |
 
-**Response:** `{resource_id, columns: [{name, type, description?}]}`
+**Response:** `{resource_id, columns: [{name, type, description?, dictionary_title?, dictionary_description?, dictionary_type?}], dictionary_identifier?, dictionary_url?}`
 
 **Notes:**
 - `record_number` column is excluded from output
 - `description` key present only when the column has one
+- When the distribution links to a data dictionary (`describedBy`), per-column `dictionary_title` / `dictionary_description` / `dictionary_type` are merged in (publisher-curated values, distinct from the DB-derived `type`); root-level `dictionary_identifier` and `dictionary_url` are added so callers can deep-link or fetch the full dictionary
+- Dictionary lookup is best-effort — fetch failures degrade silently to the original DB-only response shape
 
 ### `search_columns`
 

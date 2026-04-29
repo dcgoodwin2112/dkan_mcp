@@ -179,6 +179,23 @@ class McpServerFactory {
       ],
     );
 
+    $builder->addTool(
+      handler: fn(string $dataset_or_resource_id) => $this->metastoreTools->getDataDictionary($dataset_or_resource_id),
+      name: 'get_data_dictionary',
+      description: 'Get the data dictionary linked to a dataset or distribution. Accepts a dataset UUID or a resource_id (identifier__version). Returns dictionary fields with curated titles, descriptions, and declared types — or an error if no dictionary is linked. Note: get_datastore_schema already merges dictionary fields into its column response; use this tool when you need the full dictionary independent of the datastore schema (e.g., to see fields the datastore does not expose).',
+      annotations: $readOnly,
+      inputSchema: [
+        'type' => 'object',
+        'properties' => [
+          'dataset_or_resource_id' => [
+            'type' => 'string',
+            'description' => 'Dataset UUID or resource_id in identifier__version format',
+          ],
+        ],
+        'required' => ['dataset_or_resource_id'],
+      ],
+    );
+
   }
 
   /**
