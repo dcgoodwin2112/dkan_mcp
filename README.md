@@ -1,6 +1,6 @@
 # DKAN MCP
 
-MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 54 tools: 38 read-only for discovery and querying, 16 write tools for cache management, module operations, dataset lifecycle, generic metastore item management (e.g., data dictionaries), datastore management, harvest operations, and imports.
+MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 55 tools: 39 read-only for discovery and querying (including data-dictionary access and dictionary-enriched datastore schemas), 16 write tools for cache management, module operations, dataset lifecycle, generic metastore item management (e.g., data dictionaries), datastore management, harvest operations, and imports.
 
 ## Why This Module Exists
 
@@ -179,6 +179,7 @@ Tools are organized by platform scope:
 | `list_schemas` | — | Available metadata schema IDs |
 | `get_catalog` | — | Full DCAT catalog |
 | `get_schema` | `schema_id` | JSON Schema definition by schema ID |
+| `get_data_dictionary` | `dataset_or_resource_id` | Data dictionary linked to a dataset/distribution (curated field titles, descriptions, declared types) |
 | `get_dataset_info` | `uuid` | Aggregated lineage: distributions, resources, import status, perspectives |
 
 ### Datastore
@@ -187,7 +188,7 @@ Tools are organized by platform scope:
 |---|---|---|
 | `query_datastore` | `resource_id`, `columns?`, `conditions?`, `sort_field?`, `sort_direction?`, `limit?`, `offset?`, `expressions?`, `groupings?` | Query with filters, sorting, pagination, aggregation (sum, count, avg, max, min with GROUP BY) |
 | `query_datastore_join` | `resource_id`, `join_resource_id`, `join_on`, `columns?`, `conditions?`, `sort_field?`, `sort_direction?`, `limit?`, `offset?` | Join two resources on a shared column |
-| `get_datastore_schema` | `resource_id` | Column names and types |
+| `get_datastore_schema` | `resource_id` | Column names and types. Per-column `dictionary_title` / `dictionary_description` / `dictionary_type` and root-level `dictionary_url` are merged in when the distribution links to a data dictionary |
 | `search_columns` | `search_term`, `search_in?`, `limit?` | Search column names/descriptions across all imported resources |
 | `get_datastore_stats` | `resource_id`, `columns?` | Per-column statistics: null count, distinct count, min, max, total rows |
 | `get_import_status` | `resource_id` | Import/processing status |
@@ -276,7 +277,7 @@ Datastore tools use **resource IDs** in the format `{identifier}__{version}` (e.
 ## Architecture
 
 - **Entry points**: `McpServeCommand` (Drush, stdio) and `McpController` (HTTP, Streamable HTTP transport) → `McpServerFactory` → `Mcp\Server`
-- **Tool subsetting**: `McpServerFactory::create()` accepts an optional `$toolGroups` array. `NULL` registers all 54 tools (stdio default). The HTTP controller passes a read-only subset of 21 tools.
+- **Tool subsetting**: `McpServerFactory::create()` accepts an optional `$toolGroups` array. `NULL` registers all 55 tools (stdio default). The HTTP controller passes a read-only subset of 22 tools.
 - **Autoloader isolation**: `McpAutoloaderTrait` (shared by Drush command and HTTP controller) loads the module's vendor autoloader and filters namespaces to prevent collisions with Drupal's vendor.
 - **Tool classes**:
   - From `dkan_query_tools` (shared with `dkan_nl_query` and `dkan_drupal_ai_query`): `MetastoreTools`, `DatastoreTools`, `SearchTools`
