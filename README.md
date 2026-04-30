@@ -1,6 +1,6 @@
 # DKAN MCP
 
-MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to AI coding agents (Claude Code, Cursor, Windsurf, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io). 55 tools: 39 read-only for discovery and querying (including data-dictionary access and dictionary-enriched datastore schemas), 16 write tools for cache management, module operations, dataset lifecycle, generic metastore item management (e.g., data dictionaries), datastore management, harvest operations, and imports.
+MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to MCP-capable AI coding agents via the [Model Context Protocol](https://modelcontextprotocol.io). 55 tools: 39 read-only for discovery and querying (including data-dictionary access and dictionary-enriched datastore schemas), 16 write tools for cache management, module operations, dataset lifecycle, generic metastore item management (e.g., data dictionaries), datastore management, harvest operations, and imports.
 
 ## Why This Module Exists
 
@@ -82,35 +82,13 @@ drush en dkan_mcp
 
 Drupal will auto-enable `dkan_query_tools` as a dependency if it isn't already enabled, but the Composer step in (1) must happen first so the package is on disk.
 
-## Claude Code Commands
-
-This module ships custom slash commands for Claude Code that automate common DKAN module development workflows. Each command uses the MCP tools for service discovery, event introspection, and permission validation.
-
-### Install
-
-```bash
-mkdir -p .claude/commands
-for f in web/modules/custom/dkan_mcp/claude-commands/*.md; do
-  ln -sf "../../$f" ".claude/commands/$(basename $f)"
-done
-```
-
-### Available Commands
-
-| Command | Description |
-|---|---|
-| `/scaffold-drupal-service` | Create a service class with DI, services.yml entry, and unit test |
-| `/add-event-subscriber` | Add an EventSubscriber for DKAN events with tagged service registration |
-| `/add-drupal-route` | Add a route + controller + permission |
-| `/validate-module` | Run phpcs, phpunit, permission audit, and cache rebuild |
-
 ## MCP Client Configuration
 
 Two transports are available:
 
 | Transport | Endpoint | Tools | Auth | Use Case |
 |---|---|---|---|---|
-| **stdio** | `drush dkan-mcp:serve` | All 52 | Drupal session (inherited) | Local development with Claude Code, Cursor, etc. |
+| **stdio** | `drush dkan-mcp:serve` | All 52 | Drupal session (inherited) | Local development with an MCP-capable agent |
 | **HTTP** | `POST /mcp` | 21 read-only | `access content` permission | Remote clients, browser-based tools, external agents |
 
 ### stdio (all tools)
@@ -127,12 +105,6 @@ Add a `.mcp.json` to the project root:
     }
   }
 }
-```
-
-Or add via CLI:
-
-```bash
-claude mcp add --transport stdio dkan --scope project -- ddev drush dkan-mcp:serve
 ```
 
 ### HTTP (read-only subset)

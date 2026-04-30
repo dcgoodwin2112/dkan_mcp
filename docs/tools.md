@@ -1,6 +1,6 @@
 # Tool Reference
 
-Per-tool parameter schemas, response shapes, and behavioral notes for all 52 dkan_mcp tools. For workflow sequences and common mistakes, see [CLAUDE.md](../CLAUDE.md). For overview tables and installation, see [README.md](../README.md).
+Per-tool parameter schemas, response shapes, and behavioral notes for all 52 dkan_mcp tools. For workflow sequences and common mistakes, see [AGENTS.md](../AGENTS.md). For overview tables and installation, see [README.md](../README.md).
 
 **Error convention:** All tools return `{"error": "message"}` on failure. Only success responses are documented below.
 

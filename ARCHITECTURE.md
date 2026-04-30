@@ -19,7 +19,7 @@ Technical documentation for how the DKAN MCP module works — from agent tool ca
 
 ```
 MCP Client          McpServeCommand        MCP SDK Server       Tool Class          DKAN/Drupal
-(Claude Code)       (Drush)                                     method()            Services
+(local agent)       (Drush)                                     method()            Services
      |                    |                      |                    |                   |
      |--- JSON-RPC ------>|                      |                    |                   |
      |   (stdio)          |                      |                    |                   |
@@ -54,7 +54,7 @@ MCP Client          McpController          MCP SDK Server       Tool Class      
 
 ### Step by step (stdio)
 
-1. **Client connects** — Claude Code reads `.mcp.json` and spawns `ddev drush dkan-mcp:serve` as a subprocess. All communication happens over stdin/stdout using JSON-RPC 2.0.
+1. **Client connects** — The MCP client reads `.mcp.json` and spawns `ddev drush dkan-mcp:serve` as a subprocess. All communication happens over stdin/stdout using JSON-RPC 2.0.
 
 2. **Drush bootstraps Drupal** — Drush loads the full Drupal container, giving the command access to all DKAN and Drupal services via dependency injection.
 

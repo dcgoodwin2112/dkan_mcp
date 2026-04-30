@@ -293,6 +293,3 @@ If adding a new dkan_mcp-specific tool class: create it as a Drupal service in `
 
 The MCP SDK requires `opis/json-schema ^2` but DKAN requires `^1`. The SDK lives in `dkan_mcp/vendor/` with opis packages removed post-install to prevent autoloader collisions. See README.md Architecture section for details. Run `composer run-script post-install-cleanup` after any `composer install/update` in the module directory.
 
-## Slash Commands
-
-Four Claude Code commands ship in `claude-commands/`: `/scaffold-drupal-service`, `/add-event-subscriber`, `/add-drupal-route`, `/validate-module`. These use MCP tools internally for service discovery, event introspection, and permission validation. See README.md for installation (symlink from project root `.claude/commands/` to `web/modules/custom/dkan_mcp/claude-commands/`).

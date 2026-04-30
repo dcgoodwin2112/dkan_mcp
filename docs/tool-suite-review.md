@@ -99,7 +99,7 @@ Useful but workarounds exist.
 
 ## Documentation Quality
 
-**Rating: Strong.** Three-layer documentation (README, CLAUDE.md, docs/tools.md) serves different audiences well. The CLAUDE.md agent guide with workflows, parameter reference, and common mistakes table is particularly effective.
+**Rating: Strong.** Three-layer documentation (README, AGENTS.md, docs/tools.md) serves different audiences well. The AGENTS.md agent guide with workflows, parameter reference, and common mistakes table is particularly effective.
 
 ## Test Coverage
 

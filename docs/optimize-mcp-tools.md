@@ -193,7 +193,7 @@ $builder->addTool(
 
 ## Docs to Update
 
-After implementation, update `CLAUDE.md` in the dkan_mcp module:
+After implementation, update `AGENTS.md` in the dkan_mcp module:
 - Document the new optional parameters in the "Service Discovery" and "Event-Driven Extension" workflow sections
 - Add `discover_api` to the "Service Discovery → Dependency Injection" workflow
 - Add note about using `brief: true` and `methods` filter for token efficiency

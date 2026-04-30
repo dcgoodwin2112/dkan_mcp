@@ -2,7 +2,7 @@
 
 # Evaluation: dkan_mcp MCP Tools for DKAN Module Development
 
-Analysis of how useful the 34 MCP tools are for AI agents (like Claude Code) developing custom Drupal modules for DKAN. Tools span two platform scopes: DKAN-specific tools (18) require DKAN modules; DKAN-scoped introspection tools (7) use Drupal APIs filtered to DKAN services/events/permissions; Drupal-generic tools (9) work on any Drupal site.
+Analysis of how useful the 34 MCP tools are for AI agents developing custom Drupal modules for DKAN. Tools span two platform scopes: DKAN-specific tools (18) require DKAN modules; DKAN-scoped introspection tools (7) use Drupal APIs filtered to DKAN services/events/permissions; Drupal-generic tools (9) work on any Drupal site.
 
 ## Strengths
 

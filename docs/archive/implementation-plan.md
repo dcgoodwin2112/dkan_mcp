@@ -4,7 +4,7 @@
 
 ## Context
 
-The `dkan_mcp` module will expose DKAN's data catalog and datastore to AI agents via the Model Context Protocol. This enables tools like Claude Code and Cursor to query datasets, inspect metadata, and search a DKAN site directly. The module is scaffolded but empty — this plan covers the full initial implementation.
+The `dkan_mcp` module will expose DKAN's data catalog and datastore to AI agents via the Model Context Protocol. This enables MCP-capable agents to query datasets, inspect metadata, and search a DKAN site directly. The module is scaffolded but empty — this plan covers the full initial implementation.
 
 **Key decisions:**
 - Standalone module using `mcp/sdk` (official PHP SDK, v0.4, maintained by PHP Foundation + Symfony)
@@ -146,7 +146,7 @@ services:
 ### Phase 4 — Polish
 15. Error handling (try/catch in tools, structured error responses)
 16. Tool descriptions via docblocks/attributes for LLM discoverability
-17. Update CLAUDE.md with dkan_mcp architecture section
+17. Update AGENTS.md with dkan_mcp architecture section
 
 ## Verification
 
@@ -160,7 +160,7 @@ ddev drush en dkan_mcp
 # Start MCP server (should block, waiting for JSON-RPC on stdin)
 ddev drush dkan-mcp:serve
 
-# Configure Claude Code MCP client:
+# Configure MCP client:
 # "dkan": { "command": "ddev", "args": ["drush", "dkan-mcp:serve"] }
 
 # Run tests
