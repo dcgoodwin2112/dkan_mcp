@@ -32,7 +32,7 @@ See [docs/tool-suite-review.md](docs/tool-suite-review.md) for the tool suite as
 
 - Drupal 10.2+ or 11
 - DKAN (metastore, datastore, harvest modules enabled)
-- `dkan_query_tools` module enabled (provides the catalog/datastore/search tool classes shared with `dkan_nl_query` and `dkan_drupal_ai_query`)
+- `dkan_query_tools` module enabled (provides the catalog/datastore/search tool classes shared with `dkan_drupal_ai_query`)
 - MCP SDK installed in module vendor (see Installation)
 
 ## Installation
@@ -252,7 +252,7 @@ Datastore tools use **resource IDs** in the format `{identifier}__{version}` (e.
 - **Tool subsetting**: `McpServerFactory::create()` accepts an optional `$toolGroups` array. `NULL` registers all 55 tools (stdio default). The HTTP controller passes a read-only subset of 22 tools.
 - **Autoloader isolation**: `McpAutoloaderTrait` (shared by Drush command and HTTP controller) loads the module's vendor autoloader and filters namespaces to prevent collisions with Drupal's vendor.
 - **Tool classes**:
-  - From `dkan_query_tools` (shared with `dkan_nl_query` and `dkan_drupal_ai_query`): `MetastoreTools`, `DatastoreTools`, `SearchTools`
+  - From `dkan_query_tools` (shared with `dkan_drupal_ai_query`): `MetastoreTools`, `DatastoreTools`, `SearchTools`
   - dkan_mcp-specific: `HarvestTools`, `ServiceTools`, `EventTools`, `PermissionTools`, `ResourceTools`, `WriteTools`, `DrupalTools`, `StatusTools`, `LogTools`
   - All are Drupal services with injected DKAN dependencies.
 - **opis/json-schema conflict**: DKAN requires opis v1, the MCP SDK requires v2. The SDK is installed in `dkan_mcp/vendor/` (not site-level). `SchemaValidatorShim` replaces the SDK's opis-dependent validator. The `post-install-cleanup` script removes opis packages from module vendor to prevent autoloader collisions.
