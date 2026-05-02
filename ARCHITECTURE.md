@@ -132,7 +132,7 @@ The handler closures serve as the binding layer — they receive SDK-validated p
 
 12 plain PHP classes, each registered as a Drupal service with constructor-injected dependencies. No base class or shared interface — each tool class is a standalone adapter between MCP and DKAN/Drupal services.
 
-The first three classes live in the **`dkan_query_tools`** module (shared with `dkan_nl_query` and `dkan_drupal_ai_query`); the remainder live in `dkan_mcp/src/Tools/`.
+The first three classes live in the **`dkan_query_tools`** module (shared with `dkan_drupal_ai_query`); the remainder live in `dkan_mcp/src/Tools/`.
 
 | Service ID | Class | Source Module | DKAN/Drupal Dependencies |
 |---|---|---|---|

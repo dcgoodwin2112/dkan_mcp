@@ -256,9 +256,9 @@ Accepts DKAN module names: `metastore`, `datastore`, `harvest`, `common`, `metas
 | Route paths, controllers, access | `get_route_info` | — |
 | **Always use code reading** | | |
 | Method behavior and internal logic | — | Read source code |
-| API request/response contracts | — | Read `docs/dkan-api.md` |
-| Workflow sequences (what happens on CRUD) | — | Read `docs/dkan-workflows.md` |
-| Test patterns, mock-chain usage | — | Read `docs/dkan-testing.md` |
+| API request/response contracts | — | Read `dkan_ai_skill/claude-skills/dkan-module-author/reference/dkan-api.md` |
+| Workflow sequences (what happens on CRUD) | — | Read `dkan_ai_skill/claude-skills/dkan-module-author/reference/dkan-workflows.md` |
+| Test patterns, mock-chain usage | — | Read `dkan_ai_skill/claude-skills/dkan-module-author/reference/dkan-testing.md` |
 
 For full per-tool parameter schemas and response shapes, see [docs/tools.md](docs/tools.md).
 
@@ -275,7 +275,7 @@ Tests use standalone stubs in `tests/stubs/` (no Drupal bootstrap). Stub classes
 
 ### Adding a Tool
 
-**For catalog/metastore/datastore/search operations**, edit the relevant class in the **`dkan_query_tools`** module (`MetastoreTools`, `DatastoreTools`, `SearchTools`) — that's the shared library consumed by dkan_mcp, dkan_nl_query, and dkan_drupal_ai_query. Add the unit test in `dkan_query_tools/tests/src/Unit/Tool/`.
+**For catalog/metastore/datastore/search operations**, edit the relevant class in the **`dkan_query_tools`** module (`MetastoreTools`, `DatastoreTools`, `SearchTools`) — that's the shared library consumed by dkan_mcp and dkan_drupal_ai_query. Add the unit test in `dkan_query_tools/tests/src/Unit/Tool/`.
 
 **For MCP-server-specific operations** (harvest, write, drupal introspection, service/event/permission discovery, status, logs):
 
