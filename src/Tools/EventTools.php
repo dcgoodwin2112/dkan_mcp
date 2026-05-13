@@ -14,38 +14,38 @@ class EventTools {
    * Classes with EVENT_ constants not registered as dkan.* services.
    */
   protected const SUPPLEMENTARY_CLASSES = [
-    'Drupal\datastore\Service\ImportService',
-    'Drupal\metastore\Plugin\QueueWorker\OrphanReferenceProcessor',
-    'Drupal\common\Storage\AbstractDatabaseTable',
-    'Drupal\datastore\SqlEndpoint\WebServiceApi',
+    'Drupal\dkan_datastore\Service\ImportService',
+    'Drupal\dkan_metastore\Plugin\QueueWorker\OrphanReferenceProcessor',
+    'Drupal\dkan_common\Storage\AbstractDatabaseTable',
+    'Drupal\dkan_datastore\SqlEndpoint\WebServiceApi',
   ];
 
   /**
    * Curated mapping of event names to their dispatch-site payload types.
    *
-   * For events using Drupal\common\Events\Event, getData() returns mixed.
+   * For events using Drupal\dkan_common\Events\Event, getData() returns mixed.
    * This map records the actual type passed at the dispatch site.
    */
   protected const EVENT_PAYLOAD_TYPES = [
     'dkan_metastore_dataset_update' => [
-      'type' => 'Drupal\metastore\MetastoreItemInterface',
-      'dispatch_site' => 'Drupal\metastore\LifeCycle\LifeCycle::datasetUpdate',
+      'type' => 'Drupal\dkan_metastore\MetastoreItemInterface',
+      'dispatch_site' => 'Drupal\dkan_metastore\LifeCycle\LifeCycle::datasetUpdate',
     ],
     'dkan_metastore_metadata_pre_reference' => [
-      'type' => 'Drupal\metastore\MetastoreItemInterface',
-      'dispatch_site' => 'Drupal\metastore\LifeCycle\LifeCycle::preReference',
+      'type' => 'Drupal\dkan_metastore\MetastoreItemInterface',
+      'dispatch_site' => 'Drupal\dkan_metastore\LifeCycle\LifeCycle::preReference',
     ],
     'dkan_metastore_dataset_insert' => [
-      'type' => 'Drupal\metastore\MetastoreItemInterface',
-      'dispatch_site' => 'Drupal\metastore\LifeCycle\LifeCycle::datasetInsert',
+      'type' => 'Drupal\dkan_metastore\MetastoreItemInterface',
+      'dispatch_site' => 'Drupal\dkan_metastore\LifeCycle\LifeCycle::datasetInsert',
     ],
     'dkan_metastore_dataset_pre_reference' => [
-      'type' => 'Drupal\metastore\MetastoreItemInterface',
-      'dispatch_site' => 'Drupal\metastore\LifeCycle\LifeCycle::preReference',
+      'type' => 'Drupal\dkan_metastore\MetastoreItemInterface',
+      'dispatch_site' => 'Drupal\dkan_metastore\LifeCycle\LifeCycle::preReference',
     ],
     'dkan_metastore_metadata_registration' => [
-      'type' => 'Drupal\metastore\MetastoreItemInterface',
-      'dispatch_site' => 'Drupal\metastore\LifeCycle\LifeCycle::registration',
+      'type' => 'Drupal\dkan_metastore\MetastoreItemInterface',
+      'dispatch_site' => 'Drupal\dkan_metastore\LifeCycle\LifeCycle::registration',
     ],
   ];
 

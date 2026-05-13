@@ -2,7 +2,7 @@
 
 namespace Drupal\dkan_mcp\Tools;
 
-use Drupal\harvest\HarvestService;
+use Drupal\dkan_harvest\HarvestService;
 use Psr\Log\LoggerInterface;
 
 /**

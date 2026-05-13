@@ -582,7 +582,7 @@ class McpServerFactory {
     $builder->addTool(
       handler: fn(string $event_name, ?string $fields = NULL) => $this->eventTools->getEventInfo($event_name, $fields),
       name: 'get_event_info',
-      description: 'Get event details: declaring class, constant name, module, subscribers, event class (from subscriber type hints), event class methods, and dispatch payload type (the actual object passed to getData() at the dispatch site). For events using Drupal\common\Events\Event, the dispatch_payload field shows what getData() returns.',
+      description: 'Get event details: declaring class, constant name, module, subscribers, event class (from subscriber type hints), event class methods, and dispatch payload type (the actual object passed to getData() at the dispatch site). For events using Drupal\dkan_common\Events\Event, the dispatch_payload field shows what getData() returns.',
       annotations: $readOnly,
       inputSchema: [
         'type' => 'object',
