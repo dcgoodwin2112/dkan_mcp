@@ -6,12 +6,12 @@ use Drupal\Component\Uuid\Php as UuidGenerator;
 use Drupal\Core\Cache\Cache;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Extension\ModuleInstallerInterface;
-use Drupal\datastore\DatastoreService;
-use Drupal\metastore\Exception\CannotChangeUuidException;
-use Drupal\metastore\Exception\ExistingObjectException;
-use Drupal\metastore\Exception\MissingObjectException;
-use Drupal\metastore\Exception\UnmodifiedObjectException;
-use Drupal\metastore\MetastoreService;
+use Drupal\dkan_datastore\DatastoreService;
+use Drupal\dkan_metastore\Exception\CannotChangeUuidException;
+use Drupal\dkan_metastore\Exception\ExistingObjectException;
+use Drupal\dkan_metastore\Exception\MissingObjectException;
+use Drupal\dkan_metastore\Exception\UnmodifiedObjectException;
+use Drupal\dkan_metastore\MetastoreService;
 use Psr\Log\LoggerInterface;
 use RootedData\RootedJsonData;
 

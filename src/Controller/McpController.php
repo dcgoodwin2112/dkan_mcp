@@ -2,7 +2,6 @@
 
 namespace Drupal\dkan_mcp\Controller;
 
-use Drupal\dkan_mcp\Server\McpAutoloaderTrait;
 use Drupal\dkan_mcp\Server\McpServerFactory;
 use Psr\Log\LoggerInterface;
 use GuzzleHttp\Psr7\HttpFactory;
@@ -20,8 +19,6 @@ use Symfony\Component\HttpFoundation\Response;
  * transport at /mcp. Accepts JSON-RPC 2.0 requests over POST.
  */
 class McpController {
-
-  use McpAutoloaderTrait;
 
   /**
    * Tool groups exposed over HTTP (read-only, data consumer-focused).
@@ -44,8 +41,6 @@ class McpController {
    * Handle an MCP HTTP request.
    */
   public function handle(Request $request): Response {
-    $this->loadMcpAutoloader();
-
     try {
       // Convert Symfony Request to PSR-7.
       $psr17Factory = new HttpFactory();
