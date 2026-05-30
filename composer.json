@@ -3,15 +3,8 @@
   "description": "MCP server for DKAN.",
   "type": "drupal-custom-module",
   "license": "GPL-2.0-or-later",
-  "require": {},
-  "suggest": {
-    "mcp/sdk": "^0.4 - Required at runtime. Install in module vendor: cd dkan_mcp && composer require mcp/sdk:^0.4 && composer run-script post-install-cleanup"
-  },
-  "scripts": {
-    "post-install-cleanup": [
-      "rm -rf vendor/opis",
-      "@composer dump-autoload"
-    ]
+  "require": {
+    "mcp/sdk": "^0.4"
   },
   "require-dev": {
     "drupal/core": "^10.2 || ^11",

@@ -7,8 +7,14 @@ namespace Drupal\Core\Extension;
  */
 interface ModuleHandlerInterface {
 
+  /**
+   * Module exists.
+   */
   public function moduleExists($module);
 
+  /**
+   * Get module list.
+   */
   public function getModuleList();
 
 }

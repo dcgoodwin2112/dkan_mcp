@@ -1,12 +1,15 @@
 <?php
 
-namespace Drupal\common;
+namespace Drupal\dkan_common;
 
 /**
- * Stub for Drupal\common\DatasetInfo.
+ * Stub for Drupal\dkan_common\DatasetInfo.
  */
 class DatasetInfo {
 
+  /**
+   * Gather.
+   */
   public function gather(string $uuid): array {
     return [];
   }

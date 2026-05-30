@@ -1,43 +1,33 @@
 # DKAN MCP
 
-MCP server module for Drupal that exposes DKAN's data catalog, datastore, and internal architecture to MCP-capable AI coding agents via the [Model Context Protocol](https://modelcontextprotocol.io). 55 tools: 39 read-only for discovery and querying (including data-dictionary access and dictionary-enriched datastore schemas), 16 write tools for cache management, module operations, dataset lifecycle, generic metastore item management (e.g., data dictionaries), datastore management, harvest operations, and imports.
+MCP server module that exposes a running DKAN site's data catalog, datastore, search, and harvest operations to MCP-capable AI agents via the [Model Context Protocol](https://modelcontextprotocol.io). 35 tools: 23 read-only for catalog/datastore/search discovery and querying (including data-dictionary access and dictionary-enriched datastore schemas), and 12 write tools for dataset lifecycle, metastore item management, datastore imports, and harvest operations.
 
 ## Why This Module Exists
 
-DKAN is a Drupal distribution for open data. Building a custom module means working with two complex systems: Drupal's entity types, service container, plugin system, config API, permission model, and routing — plus DKAN's own layers on top: metadata schemas, resource references, datastore import pipeline, harvest ETL, and event-driven workflows. That knowledge lives across services.yml files, source code, and runtime state — none of it visible to an AI agent by default.
+DKAN is a Drupal distribution for open data. Its catalog metadata, datastore tables, search index, and harvest pipeline are spread across services, the database, and runtime state — none of it directly visible to an AI agent.
 
-dkan_mcp bridges that gap. It gives your AI agent direct access to a running DKAN site so it can discover how the system works and validate code against real data, all without leaving the conversation.
+dkan_mcp gives an agent direct, structured access to a running DKAN site so it can:
 
-### What an agent can do with these tools
+- **Discover the catalog** — list and read datasets, distributions, schemas, and data dictionaries.
+- **Query live data** — run filtered, sorted, aggregated, and joined queries against datastore tables; inspect column schemas and per-column statistics.
+- **Trace data lineage** — map a distribution or resource ID through its perspectives to the datastore table and owning dataset.
+- **Administer DKAN data** — create, update, patch, publish/unpublish, and delete datasets and metastore items; trigger and drop datastore imports; register, run, and deregister harvests.
+- **Check operational state** — site-level dataset/import/harvest summary and DKAN queue depths.
 
-**Understand the architecture** — `list_services` and `get_service_info` return every DKAN service ID, constructor dependencies, and public method signatures with types. An agent can write correct dependency injection and service calls without reading source code.
+Each tool returns structured data optimized for programmatic consumption.
 
-**Find integration points** — `list_events` and `get_event_info` expose all DKAN event constants, which classes dispatch them, and what subscribers are already registered. An agent can build an EventSubscriber that hooks into dataset updates, resource imports, or search queries knowing exactly what events exist and what's already listening.
-
-**Implement access control** — `list_permissions`, `get_permission_info`, and `check_permissions` provide permission definitions, route bindings, and role assignments. `check_permissions` can catch misconfigurations (orphaned route permissions, deprecated permissions) before they reach production.
-
-**Trace the resource lifecycle** — `resolve_resource` maps a resource_id through all three perspectives (source → local_file → local_url), returns the datastore table name, and reports import status. This replaces manually tracing the ResourceMapper → ResourceLocalizer → datastore import chain.
-
-**Query live data** — `query_datastore`, `get_datastore_schema`, and the metastore tools let an agent validate its code against actual datasets, table schemas, and import states on the running site.
-
-**Inspect Drupal internals** — `list_entity_types`, `get_entity_fields`, `list_plugins`, `get_config`, and `get_route_info` expose Drupal's runtime structure. An agent can discover entity types and their fields, find existing plugins, read configuration values, and understand routing without reading YAML files or guessing identifiers.
-
-### The development loop
-
-These tools enable a closed-loop workflow: discover services and events → understand their APIs → write module code → validate against the live system. The agent doesn't need to context-switch between reading docs, grepping source, and running Drush commands. Each tool returns structured data optimized for programmatic consumption.
-
-See [docs/tool-suite-review.md](docs/tool-suite-review.md) for the tool suite assessment.
+> **Scope note:** Generic Drupal/developer introspection (services, events, permissions, entity/plugin/config/route discovery, watchdog logs) and generic Drupal admin (cache clear, module enable/disable) are intentionally **not** part of this module — an agent running locally already has `drush` for those. See [`../../../../dkan-mcp-removed-tools.md`](../../../../dkan-mcp-removed-tools.md) for the removal rationale and candidates for future skills/docs.
 
 ## Requirements
 
 - Drupal 10.2+ or 11
 - DKAN (metastore, datastore, harvest modules enabled)
 - `dkan_query_tools` module enabled (provides the catalog/datastore/search tool classes shared with `dkan_drupal_ai_query`)
-- MCP SDK installed in module vendor (see Installation)
+- `mcp/sdk ^0.4` (a normal Composer dependency, resolved at site level)
 
 ## Installation
 
-1. Install the `dkan_query_tools` module first — it provides the catalog/datastore/search tool classes that dkan_mcp injects into its MCP tools. See [dkan_query_tools README](../dkan_query_tools/README.md) for full instructions; in short:
+1. Install the `dkan_query_tools` module first — it provides the catalog/datastore/search tool classes that dkan_mcp injects into its MCP tools. See [dkan_query_tools README](../dkan_query_tools/README.md); in short:
 
 ```json
 {
@@ -55,7 +45,7 @@ composer update dcgoodwin2112/dkan_query_tools
 drush en dkan_query_tools
 ```
 
-2. Add dkan_mcp as a Composer dependency:
+2. Add dkan_mcp as a Composer dependency. Its `composer.json` requires `mcp/sdk ^0.4`, which Composer resolves into the site-level `vendor/` like any other dependency — no module-local vendor, no post-install steps:
 
 ```json
 {
@@ -68,19 +58,12 @@ drush en dkan_query_tools
 }
 ```
 
-3. Install the MCP SDK in the module's own vendor directory (required due to an `opis/json-schema` version conflict with DKAN):
-
 ```bash
-cd web/modules/custom/dkan_mcp && composer require mcp/sdk:^0.4 && composer run-script post-install-cleanup
-```
-
-4. Enable the module:
-
-```bash
+composer update dcgoodwin2112/dkan_mcp
 drush en dkan_mcp
 ```
 
-Drupal will auto-enable `dkan_query_tools` as a dependency if it isn't already enabled, but the Composer step in (1) must happen first so the package is on disk.
+Drupal auto-enables `dkan_query_tools` as a dependency if it isn't already, but the Composer step in (1) must happen first so the package is on disk.
 
 ## MCP Client Configuration
 
@@ -88,8 +71,8 @@ Two transports are available:
 
 | Transport | Endpoint | Tools | Auth | Use Case |
 |---|---|---|---|---|
-| **stdio** | `drush dkan-mcp:serve` | All 52 | Drupal session (inherited) | Local development with an MCP-capable agent |
-| **HTTP** | `POST /mcp` | 21 read-only | `access content` permission | Remote clients, browser-based tools, external agents |
+| **stdio** | `drush dkan-mcp:serve` | All 35 | Drupal session (inherited) | Local development with an MCP-capable agent |
+| **HTTP** | `POST /mcp` | 22 read-only | `access content` permission | Remote clients, browser-based tools, external agents |
 
 ### stdio (all tools)
 
@@ -109,7 +92,7 @@ Add a `.mcp.json` to the project root:
 
 ### HTTP (read-only subset)
 
-The HTTP endpoint exposes 21 data-consumer tools at `/mcp` using the MCP [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) transport. All requests use JSON-RPC 2.0.
+The HTTP endpoint exposes 22 data-consumer tools at `/mcp` using the MCP [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) transport. All requests use JSON-RPC 2.0.
 
 ```json
 {
@@ -122,23 +105,17 @@ The HTTP endpoint exposes 21 data-consumer tools at `/mcp` using the MCP [Stream
 }
 ```
 
-**Included tool groups**: metastore (7), datastore (6), search (1), harvest read (4), resource (1), status (2).
+**Included tool groups**: metastore (8), datastore (6), search (1), harvest read (4), resource (1), status (2).
 
-**Excluded**: write tools, dev/admin introspection (services, events, permissions, Drupal internals, logs, `get_dataset_info`).
+**Excluded**: all write tools (dataset/metastore lifecycle, imports, datastore drop), harvest write tools, and `get_dataset_info` (its own `metastore_dev` group — a heavier aggregation kept stdio-only).
 
-**Session management**: the endpoint uses file-based sessions. Clients must send `Mcp-Session-Id` header (returned by `initialize`) on subsequent requests.
+**Session management**: the endpoint uses file-based sessions. Clients must send the `Mcp-Session-Id` header (returned by `initialize`) on subsequent requests.
 
 **CORS**: enabled for all origins on the `/mcp` path.
 
 ## Tools
 
-For full per-tool parameter schemas, response shapes, and behavioral notes, see [docs/tools.md](docs/tools.md).
-
-Tools are organized by platform scope:
-
-- **DKAN tools** (Metastore, Datastore, Search, Harvest, DKAN Introspection): Require DKAN modules, operate on DKAN's data model and services.
-- **Drupal tools**: Work on any Drupal site, no DKAN dependency — entity types, fields, plugins, config, routes, modules, cache, and module management.
-- **Write tools**: Mixed — `create_test_dataset` and `import_resource` are DKAN-specific; `clear_cache`, `enable_module`, `disable_module` are Drupal-generic.
+For full per-tool parameter schemas, response shapes, and behavioral notes, see [docs/tools.md](docs/tools.md). For workflow sequences and common mistakes, see [AGENTS.md](AGENTS.md).
 
 ### Metastore
 
@@ -146,99 +123,69 @@ Tools are organized by platform scope:
 |---|---|---|
 | `list_datasets` | `offset?`, `limit?` | Dataset summaries with pagination |
 | `get_dataset` | `identifier` | Full dataset metadata by UUID |
-| `list_distributions` | `dataset_id` | Distributions for a dataset (includes `resource_id`) |
+| `list_distributions` | `datasetId` | Distributions for a dataset (includes `resource_id`) |
 | `get_distribution` | `identifier` | Distribution metadata by UUID |
 | `list_schemas` | — | Available metadata schema IDs |
 | `get_catalog` | — | Full DCAT catalog |
-| `get_schema` | `schema_id` | JSON Schema definition by schema ID |
-| `get_data_dictionary` | `dataset_or_resource_id` | Data dictionary linked to a dataset/distribution (curated field titles, descriptions, declared types) |
-| `get_dataset_info` | `uuid` | Aggregated lineage: distributions, resources, import status, perspectives |
+| `get_schema` | `schemaId` | JSON Schema definition by schema ID |
+| `get_data_dictionary` | `datasetOrResourceId` | Data dictionary linked to a dataset/distribution (curated field titles, descriptions, declared types) |
+| `get_dataset_info` | `uuid` | Aggregated lineage: distributions, resources, import status, perspectives (stdio only — `metastore_dev` group) |
 
 ### Datastore
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `query_datastore` | `resource_id`, `columns?`, `conditions?`, `sort_field?`, `sort_direction?`, `limit?`, `offset?`, `expressions?`, `groupings?` | Query with filters, sorting, pagination, aggregation (sum, count, avg, max, min with GROUP BY) |
-| `query_datastore_join` | `resource_id`, `join_resource_id`, `join_on`, `columns?`, `conditions?`, `sort_field?`, `sort_direction?`, `limit?`, `offset?` | Join two resources on a shared column |
-| `get_datastore_schema` | `resource_id` | Column names and types. Per-column `dictionary_title` / `dictionary_description` / `dictionary_type` and root-level `dictionary_url` are merged in when the distribution links to a data dictionary |
-| `search_columns` | `search_term`, `search_in?`, `limit?` | Search column names/descriptions across all imported resources |
-| `get_datastore_stats` | `resource_id`, `columns?` | Per-column statistics: null count, distinct count, min, max, total rows |
-| `get_import_status` | `resource_id` | Import/processing status |
+| `query_datastore` | `resourceId`, `columns?`, `conditions?`, `sortField?`, `sortDirection?`, `limit?`, `offset?`, `expressions?`, `groupings?` | Query with filters, sorting, pagination, aggregation (sum, count, avg, max, min with GROUP BY) |
+| `query_datastore_join` | `resourceId`, `joinResourceId`, `joinOn`, `columns?`, `conditions?`, `sortField?`, `sortDirection?`, `limit?`, `offset?`, `expressions?`, `groupings?` | Join two resources on a shared column |
+| `get_datastore_schema` | `resourceId` | Column names and types (accepts `identifier__version` or a distribution UUID). Per-column `dictionary_title` / `dictionary_description` / `dictionary_type` and root-level `dictionary_identifier` / `dictionary_url` are merged in when the distribution links to a data dictionary |
+| `search_columns` | `searchTerm`, `searchIn?`, `limit?` | Search column names/descriptions across all imported resources |
+| `get_datastore_stats` | `resourceId`, `columns?` | Per-column statistics: null count, distinct count, min, max, total rows |
+| `get_import_status` | `resourceId` | Import/processing status |
 
 ### Search
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `search_datasets` | `keyword`, `page?`, `page_size?` | Keyword search across datasets |
+| `search_datasets` | `keyword`, `page?`, `pageSize?` | Keyword search across datasets |
 
 ### Harvest
 
 | Tool | Parameters | Description |
 |---|---|---|
 | `list_harvest_plans` | — | All registered harvest plan IDs |
-| `get_harvest_plan` | `plan_id` | Plan config: source URL, extract/transform/load settings |
-| `get_harvest_runs` | `plan_id` | All runs with timestamps and status |
-| `get_harvest_run_result` | `plan_id`, `run_id?` | Detailed run result (latest if `run_id` omitted) |
+| `get_harvest_plan` | `planId` | Plan config: source URL, extract/transform/load settings |
+| `get_harvest_runs` | `planId` | All runs with timestamps and status |
+| `get_harvest_run_result` | `planId`, `runId?` | Detailed run result (latest if `runId` omitted) |
 | `register_harvest` | `plan` | Register a new harvest plan (JSON string) |
-| `run_harvest` | `plan_id` | Execute a harvest run for a registered plan |
-| `deregister_harvest` | `plan_id` | Remove a registered harvest plan |
+| `run_harvest` | `planId` | Execute a harvest run for a registered plan |
+| `deregister_harvest` | `planId` | Remove a registered harvest plan |
 
-### DKAN Introspection
+### Resource
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `list_services` | `module?` | DKAN service IDs with class names |
-| `get_service_info` | `service_id` | Class, constructor dependencies, public method signatures |
-| `get_class_info` | `class_name` | Full public API of any class/interface: parent, interfaces, all methods with types and declaring class |
-| `list_events` | `module?` | Event constants with string values and declaring classes |
-| `get_event_info` | `event_name` | Event details with registered subscriber classes and methods |
-| `list_permissions` | `module?` | DKAN permissions with title, description, provider |
-| `get_permission_info` | `permission` | Permission definition, routes requiring it, roles holding it |
-| `check_permissions` | — | Detect permission misconfigurations (orphaned, unused) |
-| `resolve_resource` | `id` | Trace distribution UUID or resource_id → perspectives → datastore table |
+| `resolve_resource` | `id` | Trace distribution UUID or resource_id → perspectives → datastore table, import status, owning `dataset_uuid` |
 
 ### Write
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `clear_cache` | — | Flush all Drupal caches |
-| `enable_module` | `module_name` | Enable a Drupal module |
-| `disable_module` | `module_name` | Uninstall a Drupal module |
-| `create_test_dataset` | `title`, `download_url` | Create a minimal dataset with one CSV distribution |
-| `import_resource` | `resource_id`, `deferred?` | Trigger datastore import for a resource |
-| `update_dataset` | `identifier`, `metadata` | Full replacement of dataset metadata (PUT semantics) |
+| `import_resource` | `resourceId`, `deferred?` | Trigger datastore import for a resource |
+| `update_dataset` | `identifier`, `metadata` | Full replacement of dataset metadata (PUT semantics; upserts) |
 | `patch_dataset` | `identifier`, `metadata` | Partial update via JSON Merge Patch (RFC 7396) |
-| `post_metastore_item` | `schema_id`, `metadata` | Create a metastore item under any schema (data-dictionary, distribution, theme, keyword, etc.) |
-| `patch_metastore_item` | `schema_id`, `identifier`, `metadata` | Partial update of any metastore item via JSON Merge Patch |
+| `post_metastore_item` | `schemaId`, `metadata` | Create a metastore item under any schema (data-dictionary, distribution, theme, keyword, etc.) |
+| `patch_metastore_item` | `schemaId`, `identifier`, `metadata` | Partial update of any metastore item via JSON Merge Patch |
 | `delete_dataset` | `identifier` | Delete a dataset and cascade-delete distributions and datastore tables |
 | `publish_dataset` | `identifier` | Publish a dataset to make it publicly visible |
 | `unpublish_dataset` | `identifier` | Unpublish (archive) a dataset |
-| `drop_datastore` | `resource_id` | Drop the datastore table for a resource |
+| `drop_datastore` | `resourceId` | Drop the datastore table for a resource |
 
 ### Status
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `get_site_status` | — | Site health overview: dataset/distribution counts, import status, harvest plans, DKAN/Drupal versions |
-| `get_queue_status` | `queue_name?` | Queue item counts for DKAN queues (import, localization, cleanup) |
-
-### Log
-
-| Tool | Parameters | Description |
-|---|---|---|
-| `get_recent_logs` | `type?`, `severity?`, `limit?`, `offset?` | Recent watchdog log entries with optional filters |
-| `get_log_types` | — | Distinct log types with entry counts |
-
-### Drupal
-
-| Tool | Parameters | Description |
-|---|---|---|
-| `list_entity_types` | `group?` | Entity types with bundles, filterable by group |
-| `get_entity_fields` | `entity_type_id`, `bundle?` | Field definitions for an entity type/bundle |
-| `list_modules` | `name_contains?` | Enabled modules with metadata |
-| `get_config` | `name?`, `prefix?` | Config values by name or list names by prefix |
-| `list_plugins` | `type` | Plugin definitions by type |
-| `get_route_info` | `route_name?`, `path?` | Route details by name or path pattern |
+| `get_site_status` | — | Site overview: dataset/distribution counts, import status, harvest plans, DKAN/Drupal versions |
+| `get_queue_status` | `queueName?` | Queue item counts for DKAN queues (import, localization, cleanup) |
 
 ## Resource ID Formats
 
@@ -248,27 +195,33 @@ Datastore tools use **resource IDs** in the format `{identifier}__{version}` (e.
 
 ## Architecture
 
-- **Entry points**: `McpServeCommand` (Drush, stdio) and `McpController` (HTTP, Streamable HTTP transport) → `McpServerFactory` → `Mcp\Server`
-- **Tool subsetting**: `McpServerFactory::create()` accepts an optional `$toolGroups` array. `NULL` registers all 55 tools (stdio default). The HTTP controller passes a read-only subset of 22 tools.
-- **Autoloader isolation**: `McpAutoloaderTrait` (shared by Drush command and HTTP controller) loads the module's vendor autoloader and filters namespaces to prevent collisions with Drupal's vendor.
-- **Tool classes**:
-  - From `dkan_query_tools` (shared with `dkan_drupal_ai_query`): `MetastoreTools`, `DatastoreTools`, `SearchTools`
-  - dkan_mcp-specific: `HarvestTools`, `ServiceTools`, `EventTools`, `PermissionTools`, `ResourceTools`, `WriteTools`, `DrupalTools`, `StatusTools`, `LogTools`
-  - All are Drupal services with injected DKAN dependencies.
-- **opis/json-schema conflict**: DKAN requires opis v1, the MCP SDK requires v2. The SDK is installed in `dkan_mcp/vendor/` (not site-level). `SchemaValidatorShim` replaces the SDK's opis-dependent validator. The `post-install-cleanup` script removes opis packages from module vendor to prevent autoloader collisions.
+- **Entry points**: `McpServeCommand` (Drush, stdio) and `McpController` (HTTP, Streamable HTTP transport) → `McpServerFactory` → `Mcp\Server`.
+- **Tool subsetting**: `McpServerFactory::create()` accepts an optional `$toolGroups` array. `NULL` registers all 35 tools (stdio default). The HTTP controller passes a read-only subset of 22 tools.
+- **Tool classes** (7 total):
+  - From `dkan_query_tools` (shared with `dkan_drupal_ai_query`): `MetastoreTools`, `DatastoreTools`, `SearchTools`.
+  - dkan_mcp-specific: `HarvestTools`, `ResourceTools`, `WriteTools`, `StatusTools`.
+  - All are Drupal services with constructor-injected DKAN dependencies.
+- **MCP SDK**: `mcp/sdk ^0.4`, a normal site-level Composer dependency. DKAN 4.x and the SDK both require `opis/json-schema ^2`, so there is no version conflict and no isolation layer.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for request flow and component detail.
 
 ## Development
 
 ### Running Tests
 
+Run the module's unit tests with the site-level PHPUnit:
+
 ```bash
-cd dkan_mcp && vendor/bin/phpunit
+cd docroot/modules/custom/dkan_mcp && ../../../../vendor/bin/phpunit
 ```
+
+Tests for the shared `MetastoreTools`, `DatastoreTools`, and `SearchTools` classes live in `dkan_query_tools`.
 
 ### Adding a Tool
 
 1. Add a method to the appropriate tool class:
-   - For catalog/metastore/datastore/search operations, edit the relevant class in `dkan_query_tools/src/Tool/` (shared with other consumers)
-   - For MCP-server-specific tools (harvest, write, drupal introspection, etc.), edit `dkan_mcp/src/Tools/`
-2. Register it in `McpServerFactory::register*Tools()`
-3. Add a test in the corresponding module's `tests/src/Unit/`
+   - For catalog/metastore/datastore/search operations, edit the relevant class in `dkan_query_tools/src/Tool/` (shared with other consumers).
+   - For MCP-server-specific tools (harvest, resource, write, status), edit `dkan_mcp/src/Tools/`.
+2. Add a spec entry (`name`, `class`, `method`, `readOnly`, `description`; optional `input`/`output` schemas) to the relevant group in the `McpServerFactory::TOOL_GROUPS` constant. A new tool class also needs a service definition, a constructor injection, and an entry in `McpServerFactory::toolContainer()`.
+3. If it should be exposed over HTTP, ensure its group is listed in `McpController::HTTP_TOOL_GROUPS`.
+4. Add a test in the corresponding module's `tests/src/Unit/`.

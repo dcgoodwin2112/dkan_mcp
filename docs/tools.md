@@ -1,10 +1,14 @@
 # Tool Reference
 
-Per-tool parameter schemas, response shapes, and behavioral notes for all 52 dkan_mcp tools. For workflow sequences and common mistakes, see [AGENTS.md](../AGENTS.md). For overview tables and installation, see [README.md](../README.md).
+Per-tool parameter schemas, response shapes, and behavioral notes for all 35 dkan_mcp tools. For workflow sequences and common mistakes, see [AGENTS.md](../AGENTS.md). For overview tables and installation, see [README.md](../README.md).
 
 **Error convention:** All tools return `{"error": "message"}` on failure. Only success responses are documented below.
 
-**ID formats:** Metastore tools accept UUIDs. Datastore tools accept resource IDs in `identifier__version` format. Use `list_distributions` to bridge between them (returns both).
+**Parameter naming:** Tool input parameters use camelCase (e.g. `resourceId`, `sortField`, `datasetId`). Response payloads use the snake_case keys shown in each **Response** line.
+
+**ID formats:** Metastore tools accept UUIDs. Datastore tools accept resource IDs in `identifier__version` format; `get_datastore_schema` and `get_datastore_stats` also accept a distribution UUID (resolved via the metastore). Use `list_distributions` to bridge between UUIDs and resource IDs (returns both).
+
+**Provenance:** Most tools map directly to DKAN REST endpoints (`/api/1/...`): metastore item read/write, search, harvest plans/runs, datastore query/join, import status, datastore drop, resource import. The following are agent-convenience value-adds with no single REST equivalent: `get_dataset_info` (wraps `DatasetInfo::gather`), `resolve_resource` (multi-service lineage + reverse dataset lookup), `search_columns` (cross-catalog column search), `get_datastore_stats` (SQL aggregation), and the data-dictionary enrichment merged into `get_datastore_schema`.
 
 ## Metastore
 
@@ -58,7 +62,7 @@ List distributions for a dataset. Bridge between metastore UUIDs and datastore r
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `dataset_id` | string | yes | -- | Dataset UUID |
+| `datasetId` | string | yes | -- | Dataset UUID |
 
 **Response:** `{distributions: [{identifier, resource_id, title, mediaType, downloadURL}]}`
 
@@ -84,7 +88,7 @@ Get a JSON Schema definition by schema ID.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `schema_id` | string | yes | -- | Schema ID (e.g., `dataset`, `distribution`, `keyword`) |
+| `schemaId` | string | yes | -- | Schema ID (e.g., `dataset`, `distribution`, `keyword`) |
 
 **Response:** `{schema_id, schema: {type, properties, required, ...}}`
 
@@ -98,7 +102,7 @@ Get the data dictionary linked to a dataset or distribution.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `dataset_or_resource_id` | string | yes | -- | Dataset UUID or resource ID (`identifier__version`) |
+| `datasetOrResourceId` | string | yes | -- | Dataset UUID or resource ID (`identifier__version`) |
 
 **Response:** `{dictionaries: {<resource_id>: {identifier, url, title, fields: [{name, type, title?, description?}]}}}` or `{error}`
 
@@ -120,7 +124,7 @@ Get aggregated dataset lineage: distributions, resources, import status, perspec
 
 **Notes:**
 - Returns the actual output of `DatasetInfo::gather()` with all plugin-contributed keys
-- Use this to discover array structures that `get_class_info` can't reveal (methods returning `array`)
+- Use this to discover the actual array structure returned by `DatasetInfo::gather()` (a method typed `array`) rather than guessing keys
 - `importer_status` values: `"waiting"`, `"done"`, `"error"`
 
 ## Datastore
@@ -131,11 +135,11 @@ Query a datastore resource with filters, sorting, pagination, and aggregation.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `resource_id` | string | yes | -- | Resource ID (`identifier__version`) |
+| `resourceId` | string | yes | -- | Resource ID (`identifier__version`) |
 | `columns` | string | no | all | Comma-separated column names |
 | `conditions` | string | no | -- | JSON array: `[{"property":"col","value":"val","operator":"="}]` |
-| `sort_field` | string | no | -- | Column to sort by |
-| `sort_direction` | string | no | `"asc"` | `"asc"` or `"desc"` |
+| `sortField` | string | no | -- | Column to sort by |
+| `sortDirection` | string | no | `"asc"` | `"asc"` or `"desc"` |
 | `limit` | integer | no | 100 | Max rows (clamped 1-500) |
 | `offset` | integer | no | 0 | Rows to skip |
 | `expressions` | string | no | -- | JSON array: `[{"operator":"sum","operands":["col"],"alias":"total"}]` |
@@ -161,13 +165,13 @@ Join and query two datastore resources. Primary aliased as `t`, joined as `j`.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `resource_id` | string | yes | -- | Primary resource ID |
-| `join_resource_id` | string | yes | -- | Joined resource ID |
-| `join_on` | string | yes | -- | Simple: `"col1=col2"`. JSON: `{"left":"t.col","right":"j.col","operator":"="}` |
+| `resourceId` | string | yes | -- | Primary resource ID |
+| `joinResourceId` | string | yes | -- | Joined resource ID |
+| `joinOn` | string | yes | -- | Simple: `"col1=col2"`. JSON: `{"left":"t.col","right":"j.col","operator":"="}` |
 | `columns` | string | no | all | Alias-qualified: `"t.state,j.rate"`. Unqualified defaults to `t` |
 | `conditions` | string | no | -- | JSON array. Add `"resource":"j"` for joined-table filters. Supports `conditionGroup` for OR logic. |
-| `sort_field` | string | no | -- | Column with optional alias prefix (`"j.rate"`) |
-| `sort_direction` | string | no | `"asc"` | `"asc"` or `"desc"` |
+| `sortField` | string | no | -- | Column with optional alias prefix (`"j.rate"`) |
+| `sortDirection` | string | no | `"asc"` | `"asc"` or `"desc"` |
 | `limit` | integer | no | 100 | Max rows (clamped 1-500) |
 | `offset` | integer | no | 0 | Rows to skip |
 | `expressions` | string | no | -- | JSON array of expressions (same format as `query_datastore`). Aggregate and arithmetic operators supported. |
@@ -188,7 +192,7 @@ Get column names and types for a datastore resource.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `resource_id` | string | yes | -- | Resource ID (`identifier__version`) |
+| `resourceId` | string | yes | -- | Resource ID (`identifier__version`) or a distribution UUID |
 
 **Response:** `{resource_id, columns: [{name, type, description?, dictionary_title?, dictionary_description?, dictionary_type?}], dictionary_identifier?, dictionary_url?}`
 
@@ -204,8 +208,8 @@ Search column names/descriptions across all imported datastore resources.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `search_term` | string | yes | -- | Substring to match (case-insensitive) |
-| `search_in` | string | no | `"name"` | `"name"`, `"description"`, or `"both"` |
+| `searchTerm` | string | yes | -- | Substring to match (case-insensitive) |
+| `searchIn` | string | no | `"name"` | `"name"`, `"description"`, or `"both"` |
 | `limit` | integer | no | 100 | Max matches |
 
 **Response:** `{matches: [{dataset_title, dataset_uuid, resource_id, column_name, column_type, matched_in, column_description?}], total_matches, resources_searched, sampled?, sample_size?}`
@@ -222,7 +226,7 @@ Get per-column statistics for a datastore resource.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `resource_id` | string | yes | -- | Resource ID (`identifier__version`) |
+| `resourceId` | string | yes | -- | Resource ID (`identifier__version`) or a distribution UUID |
 | `columns` | string | no | all | Comma-separated column names to analyze |
 
 **Response:** `{resource_id, total_rows, columns: [{name, type, null_count, distinct_count, min, max}]}`
@@ -238,7 +242,7 @@ Get import/processing status of a datastore resource.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `resource_id` | string | yes | -- | Resource ID (`identifier__version`) |
+| `resourceId` | string | yes | -- | Resource ID (`identifier__version`) |
 
 **Response:** `{resource_id, status, num_of_rows, num_of_columns}`
 
@@ -257,7 +261,7 @@ Search datasets by keyword via DKAN's search API.
 |---|---|---|---|---|
 | `keyword` | string | yes | -- | Search term |
 | `page` | integer | no | 1 | Page number (1-based) |
-| `page_size` | integer | no | 10 | Results per page (clamped 1-50) |
+| `pageSize` | integer | no | 10 | Results per page (clamped 1-50) |
 
 **Response:** `{results: [{identifier, title, description, distributions}], total, page, page_size}`
 
@@ -281,7 +285,7 @@ Get harvest plan configuration.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `plan_id` | string | yes | -- | Harvest plan ID |
+| `planId` | string | yes | -- | Harvest plan ID |
 
 **Response:** `{plan: {identifier, extract: {...}, load: {...}, transforms: [...]}}`
 
@@ -291,7 +295,7 @@ List all runs for a harvest plan.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `plan_id` | string | yes | -- | Harvest plan ID |
+| `planId` | string | yes | -- | Harvest plan ID |
 
 **Response:** `{runs: [{status: {extract, transform: {class: {uuid: status}}, load: {uuid: status}}, extracted_items_ids: [uuid], orphan_ids: [uuid], identifier}], total}` -- `plan` key removed from each run to reduce size.
 
@@ -301,8 +305,8 @@ Get detailed result for a specific harvest run.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `plan_id` | string | yes | -- | Harvest plan ID |
-| `run_id` | string | no | latest | Run ID/timestamp |
+| `planId` | string | yes | -- | Harvest plan ID |
+| `runId` | string | no | latest | Run ID/timestamp |
 
 **Response:** `{result: {status: {extract, transform, load}, extracted_items_ids, orphan_ids, identifier}}` -- same structure as `get_harvest_runs` entries. `plan` key removed.
 
@@ -329,12 +333,12 @@ Execute a harvest run for a registered plan.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `plan_id` | string | yes | -- | Harvest plan ID |
+| `planId` | string | yes | -- | Harvest plan ID |
 
-**Response:** `{status: "success", plan_id, result: {status: {extract, transform, load}, extracted_items_ids, orphan_ids, identifier}, message}`
+**Response:** `{status: "success", plan_id, result: {status: {extract, transform, load}, extracted_items_ids, orphan_ids, identifier}, message}` or `{status: "not_found", plan_id, message}`
 
 **Notes:**
-- Returns `{error: "Harvest plan not found: {id}"}` if plan doesn't exist
+- Returns `{status: "not_found", plan_id, message}` if the plan doesn't exist
 - `result` contains the full harvest run output including per-dataset load status (`NEW`, `UPDATED`, `UNCHANGED`)
 - Runs synchronously — may take time for large source catalogs
 
@@ -344,115 +348,13 @@ Remove a registered harvest plan.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `plan_id` | string | yes | -- | Harvest plan ID |
+| `planId` | string | yes | -- | Harvest plan ID |
 
 **Response:** `{status: "success", plan_id, message}` or `{status: "not_found", plan_id, message}`
 
 **Notes:**
 - Does not delete datasets that were previously harvested by this plan
 - Returns `not_found` if plan doesn't exist
-
-## Introspection
-
-### `list_services`
-
-List DKAN service IDs with class names.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `module` | string | no | all | Module filter: `metastore`, `datastore`, `harvest`, `common` |
-
-**Response:** `{services: [{id, class}], total}`
-
-**Notes:**
-- Filters by `dkan.{module}.` prefix. Omit for all `dkan.*` services.
-
-### `get_service_info`
-
-Get service class, constructor dependencies, method signatures, and YAML definition.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `service_id` | string | yes | -- | Drupal service ID (e.g., `dkan.metastore.service`) |
-
-**Response:** `{service_id, class, constructor_params: [{name, type, optional?}], methods: [{name, params: [{name, type, optional?}], return_type}], yaml_definition?: {arguments?, calls?, tags?}}`
-
-**Notes:**
-- `yaml_definition` reveals setter injection (`calls`) and service tags not visible from constructor reflection
-- Methods listed are only those declared in the service's own class (not inherited)
-- Methods starting with `_` are excluded
-
-### `get_class_info`
-
-Get full public API of any PHP class or interface.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `class_name` | string | yes | -- | Fully-qualified class name (e.g., `Drupal\datastore\Storage\DatabaseTable`) |
-
-**Response:** `{class, is_abstract, is_interface, parent, interfaces: [string], methods: [{name, params: [{name, type, optional?}], return_type, declared_in}]}`
-
-**Notes:**
-- `declared_in` shows which class/interface declares each method
-- Methods starting with `_` are excluded
-
-### `list_events`
-
-List DKAN event constants with string values and declaring classes.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `module` | string | no | all | Module filter: `metastore`, `datastore`, `common`, etc. |
-
-**Response:** `{events: [{constant, event_name, declaring_class, module}], total}`
-
-### `get_event_info`
-
-Get event details, subscribers, event class, and dispatch payload type.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `event_name` | string | yes | -- | Event name string (e.g., `dkan_metastore_dataset_update`) |
-
-**Response:** `{constant, event_name, declaring_class, module, subscribers: [{class, method}], event_class?, event_methods?: [{name, params, return_type}], dispatch_payload?: {type, dispatch_site, methods}}`
-
-**Notes:**
-- `event_class` resolved from subscriber parameter type hints
-- `dispatch_payload` present for events using `Drupal\common\Events\Event` where `getData()` returns `mixed` -- documents the actual type at the dispatch site
-- `dispatch_payload.methods` lists the public API of the payload type
-
-### `list_permissions`
-
-List DKAN permissions with metadata.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `module` | string | no | all | Module provider filter |
-
-**Response:** `{permissions: [{name, title, description, provider, restrict_access}], total}`
-
-### `get_permission_info`
-
-Get permission definition, routes requiring it, and roles holding it.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `permission` | string | yes | -- | Permission machine name (e.g., `harvest_api_index`) |
-
-**Response:** `{permission, definition: {title, description, provider, restrict_access}, routes: [{route_name, path, methods, permission_expression}], roles: [{id, label}]}`
-
-### `check_permissions`
-
-Detect DKAN permission misconfigurations.
-
-*No parameters.*
-
-**Response:** `{orphaned_route_permissions: [{permission, route_name, path}], unused_permissions: [{permission, provider, note?}], orphaned_role_permissions: [{permission, role_id, role_label}], summary: {total_issues}}`
-
-**Notes:**
-- Detects three types: permissions in routes but not defined, defined but unused, assigned to roles but not defined
-- Entity access permissions (e.g., `view any data`) get a `note` explaining no route usage is expected
-- `total_issues` excludes entity access permissions from the count
 
 ## Resource
 
@@ -475,60 +377,13 @@ Trace the full reference chain for a resource.
 
 ## Write
 
-### `clear_cache`
-
-Flush all Drupal caches.
-
-*No parameters.*
-
-**Response:** `{status: "success", message}`
-
-**Notes:**
-- Does not rebuild the service container -- restart MCP server after `services.yml` changes
-
-### `enable_module`
-
-Enable a Drupal module.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `module_name` | string | yes | -- | Module machine name |
-
-**Response:** `{status, message}` -- `status`: `"success"` or `"already_enabled"`
-
-### `disable_module`
-
-Uninstall a Drupal module.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `module_name` | string | yes | -- | Module machine name |
-
-**Response:** `{status, message}` -- `status`: `"success"` or `"not_enabled"`
-
-### `create_test_dataset`
-
-Create a minimal dataset with one CSV distribution.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `title` | string | yes | -- | Dataset title |
-| `download_url` | string | yes | -- | URL to a CSV file |
-
-**Response:** `{status: "success", identifier, message}`
-
-**Notes:**
-- Creates and publishes the dataset immediately
-- Distribution references may need cron to fully resolve
-- Follow up: `list_distributions` -> `import_resource` -> `query_datastore`
-
 ### `import_resource`
 
 Trigger datastore import for a resource.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `resource_id` | string | yes | -- | Resource ID (`identifier__version`) |
+| `resourceId` | string | yes | -- | Resource ID (`identifier__version`) |
 | `deferred` | boolean | no | `false` | Queue for background processing |
 
 **Response:** `{status, resource_id, import_result, errors, message}`
@@ -576,14 +431,14 @@ Create a metastore item under any schema (e.g., `data-dictionary`, `distribution
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `schema_id` | string | yes | -- | Metastore schema ID (e.g., `data-dictionary`) |
+| `schemaId` | string | yes | -- | Metastore schema ID (e.g., `data-dictionary`) |
 | `metadata` | string | yes | -- | Item metadata as JSON object string. Must include `identifier` and the schema's required fields. |
 
 **Response:** `{status: "success", schema_id, identifier, message}`, `{status: "already_exists", schema_id, message}`, or `{error}`
 
 **Notes:**
-- For datasets prefer `create_test_dataset` or `update_dataset`
-- Use `list_schemas` and `get_schema(schema_id)` to discover required fields
+- For datasets prefer `update_dataset`
+- Use `list_schemas` and `get_schema(schemaId)` to discover required fields
 - For data dictionaries, body is `{identifier, data: {title, fields: [{name, type, title?, description?}]}}`. Link to a distribution via `patch_dataset` setting `distribution[i].data.describedBy` (URL to the dictionary item) and `describedByType: "application/vnd.tableschema+json"`. Requires `metastore.settings.data_dictionary_mode = "reference"`.
 
 ### `patch_metastore_item`
@@ -592,7 +447,7 @@ Partial update of any metastore item via JSON Merge Patch (RFC 7396).
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `schema_id` | string | yes | -- | Metastore schema ID |
+| `schemaId` | string | yes | -- | Metastore schema ID |
 | `identifier` | string | yes | -- | Item identifier (UUID) |
 | `metadata` | string | yes | -- | JSON object with only fields to change |
 
@@ -651,7 +506,7 @@ Drop the datastore table for a resource.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `resource_id` | string | yes | -- | Resource ID (`identifier__version`) |
+| `resourceId` | string | yes | -- | Resource ID (`identifier__version`) |
 
 **Response:** `{status: "success", resource_id, message}`
 
@@ -681,131 +536,10 @@ Get queue item counts for DKAN queues.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `queue_name` | string | no | all | Specific queue name (e.g., `datastore_import`) |
+| `queueName` | string | no | all | Specific queue name (e.g., `datastore_import`) |
 
 **Response:** `{queues: [{name, items, title, cron_time?, lease_time?}]}`
 
 **Notes:**
-- Without `queue_name`, returns all queues from DKAN modules (datastore, metastore, common, harvest)
+- Without `queueName`, returns all queues from DKAN modules (datastore, metastore, common, harvest)
 - `cron_time` and `lease_time` present only when defined in the queue worker plugin
-
-## Drupal
-
-### `list_entity_types`
-
-List Drupal entity types with bundles.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `group` | string | no | all | `"content"` or `"configuration"` |
-
-**Response:** `{entity_types: [{id, label, class, group, entity_keys: {id, ...}, storage_class, bundles: [{id, label}]}], total}`
-
-### `get_entity_fields`
-
-Get field definitions for an entity type/bundle.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `entity_type_id` | string | yes | -- | Entity type ID (e.g., `node`, `user`) |
-| `bundle` | string | no | -- | Bundle name. Omit for base fields only |
-
-**Response:** `{fields: [{name, type, label, required, cardinality, description, is_base_field}], total}`
-
-**Notes:**
-- Auto-resolves bundle for non-bundleable entities (e.g., `user` -> bundle `user`)
-- Without bundle on bundleable entities, returns base fields only
-- Validates bundle exists and lists valid bundles in error message
-
-### `list_modules`
-
-List enabled Drupal modules with metadata.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `name_contains` | string | no | all | Substring filter on machine name |
-
-**Response:** `{modules: [{name, human_name, version, package, path, dependencies}], total}`
-
-**Notes:**
-- `version` is `null` for modules installed via Composer path repos or without explicit version info
-
-### `get_config`
-
-Get Drupal configuration values or list config names.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `name` | string | no | -- | Full config name (e.g., `system.site`) |
-| `prefix` | string | no | -- | Config name prefix to list (e.g., `system.`) |
-
-**Response (name):** `{config_name, data: {...}}` -- `_core` key stripped.
-
-**Response (prefix):** `{config_names: [string], total}`
-
-**Notes:**
-- Provide `name` OR `prefix`, not both
-- Returns error if neither provided
-
-### `list_plugins`
-
-List plugin definitions by type.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `type` | string | yes | -- | Plugin type (e.g., `block`, `field.field_type`, `queue_worker`) |
-
-**Response:** `{plugins: [{id, label?, class?, provider?, category?}], total}`
-
-**Notes:**
-- Resolves to `plugin.manager.{type}` service
-- Optional keys present only when defined in the plugin definition
-
-### `get_route_info`
-
-Get route details by name or path pattern.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `route_name` | string | no | -- | Exact route name |
-| `path` | string | no | -- | Path pattern to search (e.g., `/api/1/`) |
-
-**Response:** `{routes: [{name, path, methods, controller?: {type, value}, requirements?: {_permission?, ...}, admin_route?, parameters?}], total?}`
-
-**Notes:**
-- Provide `route_name` OR `path`, not both
-- `controller.type`: `_controller`, `_form`, `_entity_form`, or `_entity_list`
-- `total` only present for path pattern searches
-- `admin_route` only present when true
-
-## Logs
-
-### `get_recent_logs`
-
-Get recent watchdog log entries with optional filters.
-
-| Parameter | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `type` | string | no | all | Log type (e.g., `"dkan"`, `"php"`, `"user"`) |
-| `severity` | integer | no | all | Max severity 0-7 (returns this level and more severe) |
-| `limit` | integer | no | 25 | Max entries (clamped 1-100) |
-| `offset` | integer | no | 0 | Pagination offset |
-
-**Response:** `{entries: [{wid, type, severity, severity_label, message, timestamp, location, uid}], total, limit, offset}`
-
-**Notes:**
-- Requires `dblog` module (returns error if not enabled)
-- Severity follows RFC 5424: 0=Emergency, 1=Alert, 2=Critical, 3=Error, 4=Warning, 5=Notice, 6=Info, 7=Debug
-- Messages have variables interpolated (rendered, not raw placeholders)
-- Ordered by `wid` descending (most recent first)
-
-### `get_log_types`
-
-List distinct watchdog log types with entry counts.
-
-*No parameters.*
-
-**Response:** `{types: [{type, count}]}` -- ordered by count descending.
-
-**Notes:**
-- Requires `dblog` module
