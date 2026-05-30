@@ -4,13 +4,13 @@ namespace Drupal\dkan_mcp\Tools;
 
 use Composer\InstalledVersions;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
-use Drupal\common\DatasetInfo;
+use Drupal\dkan_common\DatasetInfo;
 use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Queue\QueueFactory;
 use Drupal\Core\Queue\QueueWorkerManagerInterface;
-use Drupal\harvest\HarvestService;
-use Drupal\metastore\MetastoreService;
+use Drupal\dkan_harvest\HarvestService;
+use Drupal\dkan_metastore\MetastoreService;
 
 /**
  * MCP tools for DKAN site health and status overview.
@@ -67,6 +67,9 @@ class StatusTools {
 
   /**
    * Get queue item counts for DKAN-related queues.
+   *
+   * @param string|null $queueName
+   *   Specific queue name (e.g. datastore_import). Omit for all DKAN queues.
    */
   public function getQueueStatus(?string $queueName = NULL): array {
     try {

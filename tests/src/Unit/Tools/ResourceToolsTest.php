@@ -2,18 +2,24 @@
 
 namespace Drupal\Tests\dkan_mcp\Unit\Tools;
 
-use Drupal\common\DataResource;
-use Drupal\common\DatasetInfo;
-use Drupal\common\Storage\DatabaseTableInterface;
-use Drupal\datastore\DatastoreService;
+use Drupal\dkan_common\DataResource;
+use Drupal\dkan_common\DatasetInfo;
+use Drupal\dkan_common\Storage\DatabaseTableInterface;
+use Drupal\dkan_datastore\DatastoreService;
 use Drupal\dkan_mcp\Tools\ResourceTools;
-use Drupal\metastore\MetastoreService;
-use Drupal\metastore\ResourceMapper;
+use Drupal\dkan_metastore\MetastoreService;
+use Drupal\dkan_metastore\ResourceMapper;
 use PHPUnit\Framework\TestCase;
 use RootedData\RootedJsonData;
 
+/**
+ * Tests ResourceTools.
+ */
 class ResourceToolsTest extends TestCase {
 
+  /**
+   * Create tools.
+   */
   protected function createTools(
     MetastoreService $metastore,
     ResourceMapper $resourceMapper,
@@ -28,6 +34,9 @@ class ResourceToolsTest extends TestCase {
     );
   }
 
+  /**
+   * Create default mocks.
+   */
   protected function createDefaultMocks(): array {
     return [
       $this->createMock(MetastoreService::class),
@@ -36,6 +45,9 @@ class ResourceToolsTest extends TestCase {
     ];
   }
 
+  /**
+   * Create data resource.
+   */
   protected function createDataResource(string $filePath, string $mimeType): DataResource {
     $resource = $this->createMock(DataResource::class);
     $resource->method('getFilePath')->willReturn($filePath);
@@ -43,6 +55,9 @@ class ResourceToolsTest extends TestCase {
     return $resource;
   }
 
+  /**
+   * Create distribution json.
+   */
   protected function createDistributionJson(string $identifier, string $version): string {
     return json_encode([
       'identifier' => 'dist-uuid-123',
@@ -64,6 +79,9 @@ class ResourceToolsTest extends TestCase {
     ]);
   }
 
+  /**
+   * Tests resolve from resource id.
+   */
   public function testResolveFromResourceId(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
@@ -99,6 +117,9 @@ class ResourceToolsTest extends TestCase {
     $this->assertEquals('done', $result['import_status']);
   }
 
+  /**
+   * Tests resolve from distribution uuid.
+   */
   public function testResolveFromDistributionUuid(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
@@ -120,6 +141,9 @@ class ResourceToolsTest extends TestCase {
     $this->assertEquals('abc123__111', $result['resource_id']);
   }
 
+  /**
+   * Tests resolve no perspectives.
+   */
   public function testResolveNoPerspectives(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
@@ -133,6 +157,9 @@ class ResourceToolsTest extends TestCase {
     $this->assertEmpty($result['perspectives']);
   }
 
+  /**
+   * Tests resolve distribution not found.
+   */
   public function testResolveDistributionNotFound(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
@@ -145,6 +172,9 @@ class ResourceToolsTest extends TestCase {
     $this->assertStringContainsString('not found', $result['error']);
   }
 
+  /**
+   * Tests resolve datastore table name.
+   */
   public function testResolveDatastoreTableName(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
@@ -161,6 +191,9 @@ class ResourceToolsTest extends TestCase {
     $this->assertEquals('datastore_real_table', $result['datastore_table']);
   }
 
+  /**
+   * Tests resolve datastore table null when storage unavailable.
+   */
   public function testResolveDatastoreTableNullWhenStorageUnavailable(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
@@ -174,6 +207,9 @@ class ResourceToolsTest extends TestCase {
     $this->assertNull($result['datastore_table']);
   }
 
+  /**
+   * Tests resolve import status with object summary.
+   */
   public function testResolveImportStatusWithObjectSummary(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
@@ -191,6 +227,9 @@ class ResourceToolsTest extends TestCase {
     $this->assertEquals('done', $result['import_status']);
   }
 
+  /**
+   * Tests resolve import not started.
+   */
   public function testResolveImportNotStarted(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
@@ -204,6 +243,9 @@ class ResourceToolsTest extends TestCase {
     $this->assertEquals('not_imported', $result['import_status']);
   }
 
+  /**
+   * Tests resolve includes dataset uuid.
+   */
   public function testResolveIncludesDatasetUuid(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
@@ -237,6 +279,9 @@ class ResourceToolsTest extends TestCase {
     $this->assertEquals('dataset-uuid-1', $result['dataset_uuid']);
   }
 
+  /**
+   * Tests resolve dataset uuid null when not found.
+   */
   public function testResolveDatasetUuidNullWhenNotFound(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 
@@ -252,6 +297,9 @@ class ResourceToolsTest extends TestCase {
     $this->assertNull($result['dataset_uuid']);
   }
 
+  /**
+   * Tests resolve distribution no ref download url.
+   */
   public function testResolveDistributionNoRefDownloadUrl(): void {
     [$metastore, $resourceMapper, $datastoreService] = $this->createDefaultMocks();
 

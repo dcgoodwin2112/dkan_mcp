@@ -2,142 +2,33 @@
 
 namespace Drupal\dkan_mcp\Tools;
 
-use Drupal\Component\Uuid\Php as UuidGenerator;
-use Drupal\Core\Cache\Cache;
-use Drupal\Core\Extension\ModuleHandlerInterface;
-use Drupal\Core\Extension\ModuleInstallerInterface;
-use Drupal\datastore\DatastoreService;
-use Drupal\metastore\Exception\CannotChangeUuidException;
-use Drupal\metastore\Exception\ExistingObjectException;
-use Drupal\metastore\Exception\MissingObjectException;
-use Drupal\metastore\Exception\UnmodifiedObjectException;
-use Drupal\metastore\MetastoreService;
+use Drupal\dkan_datastore\DatastoreService;
+use Drupal\dkan_metastore\Exception\CannotChangeUuidException;
+use Drupal\dkan_metastore\Exception\ExistingObjectException;
+use Drupal\dkan_metastore\Exception\MissingObjectException;
+use Drupal\dkan_metastore\Exception\UnmodifiedObjectException;
+use Drupal\dkan_metastore\MetastoreService;
 use Psr\Log\LoggerInterface;
 use RootedData\RootedJsonData;
 
 /**
- * MCP tools for write operations (cache, modules, datasets, imports).
+ * MCP tools for DKAN data write operations (datasets, metastore, imports).
  */
 class WriteTools {
 
   public function __construct(
-    protected ModuleInstallerInterface $moduleInstaller,
-    protected ModuleHandlerInterface $moduleHandler,
     protected MetastoreService $metastoreService,
     protected DatastoreService $datastoreService,
     protected LoggerInterface $logger,
   ) {}
 
   /**
-   * Flush all Drupal caches.
-   */
-  public function clearCache(): array {
-    try {
-      foreach (Cache::getBins() as $bin) {
-        $bin->deleteAll();
-      }
-      return [
-        'status' => 'success',
-        'message' => 'All cache bins cleared. For a full container rebuild (services.yml changes), restart the MCP server.',
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error('MCP: Cache clear failed: @error', ['@error' => $e->getMessage()]);
-      return ['error' => $e->getMessage()];
-    }
-  }
-
-  /**
-   * Enable a Drupal module.
-   */
-  public function enableModule(string $moduleName): array {
-    try {
-      if ($this->moduleHandler->moduleExists($moduleName)) {
-        return [
-          'status' => 'already_enabled',
-          'message' => "Module '{$moduleName}' is already enabled.",
-        ];
-      }
-
-      $this->moduleInstaller->install([$moduleName]);
-      $this->logger->notice('MCP: Module %module enabled.', ['%module' => $moduleName]);
-      return [
-        'status' => 'success',
-        'message' => "Module '{$moduleName}' enabled. Restart the MCP server if the module registers new services or routes.",
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error('MCP: Failed to enable module %module: @error', ['%module' => $moduleName, '@error' => $e->getMessage()]);
-      return ['error' => $e->getMessage()];
-    }
-  }
-
-  /**
-   * Uninstall a Drupal module.
-   */
-  public function disableModule(string $moduleName): array {
-    try {
-      if (!$this->moduleHandler->moduleExists($moduleName)) {
-        return [
-          'status' => 'not_enabled',
-          'message' => "Module '{$moduleName}' is not enabled.",
-        ];
-      }
-
-      $this->moduleInstaller->uninstall([$moduleName]);
-      $this->logger->notice('MCP: Module %module uninstalled.', ['%module' => $moduleName]);
-      return [
-        'status' => 'success',
-        'message' => "Module '{$moduleName}' uninstalled. Restart the MCP server if the module had registered services or routes.",
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error('MCP: Failed to uninstall module %module: @error', ['%module' => $moduleName, '@error' => $e->getMessage()]);
-      return ['error' => $e->getMessage()];
-    }
-  }
-
-  /**
-   * Create a minimal test dataset with one distribution.
-   */
-  public function createTestDataset(string $title, string $downloadUrl): array {
-    try {
-      $uuid = (new UuidGenerator())->generate();
-      $dataset = (object) [
-        'identifier' => $uuid,
-        'title' => $title,
-        'description' => "Test dataset: {$title}",
-        'accessLevel' => 'public',
-        'modified' => date('Y-m-d'),
-        'keyword' => ['test'],
-        'distribution' => [
-          (object) [
-            'downloadURL' => $downloadUrl,
-            'mediaType' => 'text/csv',
-            'title' => "{$title} distribution",
-          ],
-        ],
-        '@type' => 'dcat:Dataset',
-      ];
-
-      $identifier = $this->metastoreService->post('dataset', new RootedJsonData(json_encode($dataset)));
-      $this->metastoreService->publish('dataset', $identifier);
-
-      $this->logger->notice('MCP: Test dataset @id created.', ['@id' => $identifier]);
-      return [
-        'status' => 'success',
-        'identifier' => $identifier,
-        'message' => "Dataset created and published. Distribution references may need cron to fully resolve. Use get_dataset_info to check status, then list_distributions to get resource_id.",
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error('MCP: Failed to create test dataset: @error', ['@error' => $e->getMessage()]);
-      return ['error' => $e->getMessage()];
-    }
-  }
-
-  /**
    * Trigger datastore import for a resource.
+   *
+   * @param string $resourceId
+   *   Resource ID in identifier__version format (from list_distributions).
+   * @param bool $deferred
+   *   Queue for background processing instead of running inline.
    */
   public function importResource(string $resourceId, bool $deferred = FALSE): array {
     try {
@@ -166,13 +57,21 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
-      $this->logger->error('MCP: Import failed for resource @id: @error', ['@id' => $resourceId, '@error' => $e->getMessage()]);
+      $this->logger->error('MCP: Import failed for resource @id: @error', [
+        '@id' => $resourceId,
+        '@error' => $e->getMessage(),
+      ]);
       return ['error' => $e->getMessage()];
     }
   }
 
   /**
    * Full replacement of dataset metadata (PUT semantics).
+   *
+   * @param string $identifier
+   *   Dataset UUID.
+   * @param string $metadata
+   *   Complete dataset metadata as a JSON string.
    */
   public function updateDataset(string $identifier, string $metadata): array {
     if (!is_object(json_decode($metadata))) {
@@ -201,13 +100,21 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
-      $this->logger->error('MCP: Failed to update dataset @id: @error', ['@id' => $identifier, '@error' => $e->getMessage()]);
+      $this->logger->error('MCP: Failed to update dataset @id: @error', [
+        '@id' => $identifier,
+        '@error' => $e->getMessage(),
+      ]);
       return ['error' => $e->getMessage()];
     }
   }
 
   /**
    * Partial update via JSON Merge Patch (RFC 7396).
+   *
+   * @param string $identifier
+   *   Dataset UUID.
+   * @param string $metadata
+   *   JSON object with only the fields to change.
    */
   public function patchDataset(string $identifier, string $metadata): array {
     if (!is_object(json_decode($metadata))) {
@@ -233,13 +140,19 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
-      $this->logger->error('MCP: Failed to patch dataset @id: @error', ['@id' => $identifier, '@error' => $e->getMessage()]);
+      $this->logger->error('MCP: Failed to patch dataset @id: @error', [
+        '@id' => $identifier,
+        '@error' => $e->getMessage(),
+      ]);
       return ['error' => $e->getMessage()];
     }
   }
 
   /**
    * Remove a dataset and cascade-delete distributions and datastore tables.
+   *
+   * @param string $identifier
+   *   Dataset UUID.
    */
   public function deleteDataset(string $identifier): array {
     try {
@@ -259,13 +172,19 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
-      $this->logger->error('MCP: Failed to delete dataset @id: @error', ['@id' => $identifier, '@error' => $e->getMessage()]);
+      $this->logger->error('MCP: Failed to delete dataset @id: @error', [
+        '@id' => $identifier,
+        '@error' => $e->getMessage(),
+      ]);
       return ['error' => $e->getMessage()];
     }
   }
 
   /**
    * Publish a dataset to make it publicly visible.
+   *
+   * @param string $identifier
+   *   Dataset UUID.
    */
   public function publishDataset(string $identifier): array {
     try {
@@ -285,13 +204,19 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
-      $this->logger->error('MCP: Failed to publish dataset @id: @error', ['@id' => $identifier, '@error' => $e->getMessage()]);
+      $this->logger->error('MCP: Failed to publish dataset @id: @error', [
+        '@id' => $identifier,
+        '@error' => $e->getMessage(),
+      ]);
       return ['error' => $e->getMessage()];
     }
   }
 
   /**
    * Archive (unpublish) a dataset.
+   *
+   * @param string $identifier
+   *   Dataset UUID.
    */
   public function unpublishDataset(string $identifier): array {
     try {
@@ -311,13 +236,22 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
-      $this->logger->error('MCP: Failed to unpublish dataset @id: @error', ['@id' => $identifier, '@error' => $e->getMessage()]);
+      $this->logger->error('MCP: Failed to unpublish dataset @id: @error', [
+        '@id' => $identifier,
+        '@error' => $e->getMessage(),
+      ]);
       return ['error' => $e->getMessage()];
     }
   }
 
   /**
    * Create a metastore item under any schema (dataset, data-dictionary, etc.).
+   *
+   * @param string $schemaId
+   *   Metastore schema ID (e.g. data-dictionary, distribution, theme, keyword).
+   * @param string $metadata
+   *   Complete item metadata as a JSON object string, including identifier and
+   *   the schema's required fields.
    */
   public function postMetastoreItem(string $schemaId, string $metadata): array {
     if (!is_object(json_decode($metadata))) {
@@ -358,6 +292,13 @@ class WriteTools {
 
   /**
    * Partial update of any metastore item via JSON Merge Patch (RFC 7396).
+   *
+   * @param string $schemaId
+   *   Metastore schema ID (e.g. data-dictionary, distribution, theme, keyword).
+   * @param string $identifier
+   *   Item identifier (UUID).
+   * @param string $metadata
+   *   JSON object string with only the fields to change.
    */
   public function patchMetastoreItem(string $schemaId, string $identifier, string $metadata): array {
     if (!is_object(json_decode($metadata))) {
@@ -396,6 +337,9 @@ class WriteTools {
 
   /**
    * Drop a datastore table for a resource.
+   *
+   * @param string $resourceId
+   *   Resource ID in identifier__version format (from list_distributions).
    */
   public function dropDatastore(string $resourceId): array {
     try {
@@ -409,7 +353,10 @@ class WriteTools {
       ];
     }
     catch (\Throwable $e) {
-      $this->logger->error('MCP: Failed to drop datastore for resource @id: @error', ['@id' => $resourceId, '@error' => $e->getMessage()]);
+      $this->logger->error('MCP: Failed to drop datastore for resource @id: @error', [
+        '@id' => $resourceId,
+        '@error' => $e->getMessage(),
+      ]);
       return ['error' => $e->getMessage()];
     }
   }

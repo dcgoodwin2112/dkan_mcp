@@ -2,10 +2,10 @@
 
 namespace Drupal\dkan_mcp\Tools;
 
-use Drupal\common\DatasetInfo;
-use Drupal\datastore\DatastoreService;
-use Drupal\metastore\MetastoreService;
-use Drupal\metastore\ResourceMapper;
+use Drupal\dkan_common\DatasetInfo;
+use Drupal\dkan_datastore\DatastoreService;
+use Drupal\dkan_metastore\MetastoreService;
+use Drupal\dkan_metastore\ResourceMapper;
 
 /**
  * MCP tools for DKAN resource reference introspection.
@@ -26,6 +26,9 @@ class ResourceTools {
 
   /**
    * Trace the full reference chain for a resource.
+   *
+   * @param string $id
+   *   Distribution UUID or resource ID in identifier__version format.
    */
   public function resolveResource(string $id): array {
     try {

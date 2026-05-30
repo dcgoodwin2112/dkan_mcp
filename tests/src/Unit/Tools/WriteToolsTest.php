@@ -2,148 +2,36 @@
 
 namespace Drupal\Tests\dkan_mcp\Unit\Tools;
 
-use Drupal\Core\Extension\ModuleHandlerInterface;
-use Drupal\Core\Extension\ModuleInstallerInterface;
-use Drupal\datastore\DatastoreService;
+use Drupal\dkan_datastore\DatastoreService;
 use Drupal\dkan_mcp\Tools\WriteTools;
-use Drupal\metastore\Exception\CannotChangeUuidException;
-use Drupal\metastore\Exception\ExistingObjectException;
-use Drupal\metastore\Exception\MissingObjectException;
-use Drupal\metastore\Exception\UnmodifiedObjectException;
-use Drupal\metastore\MetastoreService;
+use Drupal\dkan_metastore\Exception\CannotChangeUuidException;
+use Drupal\dkan_metastore\Exception\ExistingObjectException;
+use Drupal\dkan_metastore\Exception\MissingObjectException;
+use Drupal\dkan_metastore\Exception\UnmodifiedObjectException;
+use Drupal\dkan_metastore\MetastoreService;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
+/**
+ * Tests WriteTools.
+ */
 class WriteToolsTest extends TestCase {
 
+  /**
+   * Create tools.
+   */
   protected function createTools(
-    ?ModuleInstallerInterface $installer = NULL,
-    ?ModuleHandlerInterface $handler = NULL,
     ?MetastoreService $metastore = NULL,
     ?DatastoreService $datastore = NULL,
   ): WriteTools {
-    $installer = $installer ?? $this->createMock(ModuleInstallerInterface::class);
-    $handler = $handler ?? $this->createMock(ModuleHandlerInterface::class);
     $metastore = $metastore ?? $this->createMock(MetastoreService::class);
     $datastore = $datastore ?? $this->createMock(DatastoreService::class);
-    return new WriteTools($installer, $handler, $metastore, $datastore, new NullLogger());
+    return new WriteTools($metastore, $datastore, new NullLogger());
   }
 
-  public function testClearCache(): void {
-    $tools = $this->createTools();
-    $result = $tools->clearCache();
-
-    $this->assertEquals('success', $result['status']);
-    $this->assertArrayHasKey('message', $result);
-  }
-
-  public function testEnableModuleSuccess(): void {
-    $handler = $this->createMock(ModuleHandlerInterface::class);
-    $handler->method('moduleExists')->with('test_module')->willReturn(FALSE);
-
-    $installer = $this->createMock(ModuleInstallerInterface::class);
-    $installer->expects($this->once())
-      ->method('install')
-      ->with(['test_module']);
-
-    $tools = $this->createTools(installer: $installer, handler: $handler);
-    $result = $tools->enableModule('test_module');
-
-    $this->assertEquals('success', $result['status']);
-  }
-
-  public function testEnableModuleAlreadyEnabled(): void {
-    $handler = $this->createMock(ModuleHandlerInterface::class);
-    $handler->method('moduleExists')->with('test_module')->willReturn(TRUE);
-
-    $installer = $this->createMock(ModuleInstallerInterface::class);
-    $installer->expects($this->never())->method('install');
-
-    $tools = $this->createTools(installer: $installer, handler: $handler);
-    $result = $tools->enableModule('test_module');
-
-    $this->assertEquals('already_enabled', $result['status']);
-  }
-
-  public function testEnableModuleError(): void {
-    $handler = $this->createMock(ModuleHandlerInterface::class);
-    $handler->method('moduleExists')->willReturn(FALSE);
-
-    $installer = $this->createMock(ModuleInstallerInterface::class);
-    $installer->method('install')->willThrowException(new \Exception('Module not found'));
-
-    $tools = $this->createTools(installer: $installer, handler: $handler);
-    $result = $tools->enableModule('nonexistent');
-
-    $this->assertArrayHasKey('error', $result);
-    $this->assertStringContainsString('Module not found', $result['error']);
-  }
-
-  public function testDisableModuleSuccess(): void {
-    $handler = $this->createMock(ModuleHandlerInterface::class);
-    $handler->method('moduleExists')->with('test_module')->willReturn(TRUE);
-
-    $installer = $this->createMock(ModuleInstallerInterface::class);
-    $installer->expects($this->once())
-      ->method('uninstall')
-      ->with(['test_module']);
-
-    $tools = $this->createTools(installer: $installer, handler: $handler);
-    $result = $tools->disableModule('test_module');
-
-    $this->assertEquals('success', $result['status']);
-  }
-
-  public function testDisableModuleNotEnabled(): void {
-    $handler = $this->createMock(ModuleHandlerInterface::class);
-    $handler->method('moduleExists')->with('test_module')->willReturn(FALSE);
-
-    $installer = $this->createMock(ModuleInstallerInterface::class);
-    $installer->expects($this->never())->method('uninstall');
-
-    $tools = $this->createTools(installer: $installer, handler: $handler);
-    $result = $tools->disableModule('test_module');
-
-    $this->assertEquals('not_enabled', $result['status']);
-  }
-
-  public function testCreateTestDataset(): void {
-    $metastore = $this->createMock(MetastoreService::class);
-    $metastore->expects($this->once())
-      ->method('post')
-      ->with('dataset', $this->callback(function ($data) {
-        $decoded = json_decode((string) $data);
-        return !empty($decoded->identifier)
-          && $decoded->title === 'Test Data'
-          && $decoded->distribution[0]->downloadURL === 'https://example.com/data.csv'
-          && $decoded->{'@type'} === 'dcat:Dataset'
-          && !empty($decoded->modified)
-          && preg_match('/^\d{4}-\d{2}-\d{2}$/', $decoded->modified)
-          && is_array($decoded->keyword)
-          && count($decoded->keyword) >= 1;
-      }))
-      ->willReturn('test-uuid-1234');
-    $metastore->expects($this->once())
-      ->method('publish')
-      ->with('dataset', 'test-uuid-1234');
-
-    $tools = $this->createTools(metastore: $metastore);
-    $result = $tools->createTestDataset('Test Data', 'https://example.com/data.csv');
-
-    $this->assertEquals('success', $result['status']);
-    $this->assertEquals('test-uuid-1234', $result['identifier']);
-  }
-
-  public function testCreateTestDatasetError(): void {
-    $metastore = $this->createMock(MetastoreService::class);
-    $metastore->method('post')->willThrowException(new \Exception('Validation failed'));
-
-    $tools = $this->createTools(metastore: $metastore);
-    $result = $tools->createTestDataset('Bad', 'not-a-url');
-
-    $this->assertArrayHasKey('error', $result);
-  }
-
+  /**
+   * Tests import resource.
+   */
   public function testImportResource(): void {
     $datastore = $this->createMock(DatastoreService::class);
     $datastore->expects($this->once())
@@ -159,6 +47,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals(['status' => 'done'], $result['import_result']);
   }
 
+  /**
+   * Tests import resource deferred.
+   */
   public function testImportResourceDeferred(): void {
     $datastore = $this->createMock(DatastoreService::class);
     $datastore->expects($this->once())
@@ -173,13 +64,22 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('queued', $result['message']);
   }
 
+  /**
+   * Tests import resource with errors.
+   */
   public function testImportResourceWithErrors(): void {
     $errorResult = new class {
 
+      /**
+       * Get status.
+       */
       public function getStatus(): string {
         return 'error';
       }
 
+      /**
+       * Get error.
+       */
       public function getError(): string {
         return 'File not found';
       }
@@ -201,6 +101,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('Import completed with errors.', $result['message']);
   }
 
+  /**
+   * Tests import resource error.
+   */
   public function testImportResourceError(): void {
     $datastore = $this->createMock(DatastoreService::class);
     $datastore->method('import')->willThrowException(new \Exception('Resource not found'));
@@ -211,6 +114,9 @@ class WriteToolsTest extends TestCase {
     $this->assertArrayHasKey('error', $result);
   }
 
+  /**
+   * Tests update dataset success.
+   */
   public function testUpdateDatasetSuccess(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->once())
@@ -225,6 +131,9 @@ class WriteToolsTest extends TestCase {
     $this->assertFalse($result['new']);
   }
 
+  /**
+   * Tests update dataset creates new.
+   */
   public function testUpdateDatasetCreatesNew(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('put')
@@ -237,6 +146,9 @@ class WriteToolsTest extends TestCase {
     $this->assertTrue($result['new']);
   }
 
+  /**
+   * Tests update dataset unmodified.
+   */
   public function testUpdateDatasetUnmodified(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('put')
@@ -249,6 +161,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('test-uuid', $result['identifier']);
   }
 
+  /**
+   * Tests update dataset cannot change uuid.
+   */
   public function testUpdateDatasetCannotChangeUuid(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('put')
@@ -261,6 +176,9 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('UUID mismatch', $result['error']);
   }
 
+  /**
+   * Tests update dataset invalid json.
+   */
   public function testUpdateDatasetInvalidJson(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->never())->method('put');
@@ -272,6 +190,9 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('Invalid JSON', $result['error']);
   }
 
+  /**
+   * Tests update dataset non object json.
+   */
   public function testUpdateDatasetNonObjectJson(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->never())->method('put');
@@ -287,6 +208,9 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('JSON object', $result2['error']);
   }
 
+  /**
+   * Tests patch dataset non object json.
+   */
   public function testPatchDatasetNonObjectJson(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->never())->method('patch');
@@ -298,6 +222,9 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('JSON object', $result['error']);
   }
 
+  /**
+   * Tests patch dataset success.
+   */
   public function testPatchDatasetSuccess(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->once())
@@ -312,6 +239,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('test-uuid', $result['identifier']);
   }
 
+  /**
+   * Tests patch dataset not found.
+   */
   public function testPatchDatasetNotFound(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('patch')
@@ -324,6 +254,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('missing-uuid', $result['identifier']);
   }
 
+  /**
+   * Tests delete dataset success.
+   */
   public function testDeleteDatasetSuccess(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->once())
@@ -339,6 +272,9 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('cascade', $result['message']);
   }
 
+  /**
+   * Tests delete dataset not found.
+   */
   public function testDeleteDatasetNotFound(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('delete')
@@ -351,6 +287,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('missing-uuid', $result['identifier']);
   }
 
+  /**
+   * Tests publish dataset success.
+   */
   public function testPublishDatasetSuccess(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->once())
@@ -364,6 +303,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('test-uuid', $result['identifier']);
   }
 
+  /**
+   * Tests publish dataset not found.
+   */
   public function testPublishDatasetNotFound(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('publish')
@@ -376,6 +318,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('missing-uuid', $result['identifier']);
   }
 
+  /**
+   * Tests publish dataset error.
+   */
   public function testPublishDatasetError(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('publish')
@@ -388,6 +333,9 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('Unexpected error', $result['error']);
   }
 
+  /**
+   * Tests unpublish dataset success.
+   */
   public function testUnpublishDatasetSuccess(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->once())
@@ -402,6 +350,9 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('unpublished', $result['message']);
   }
 
+  /**
+   * Tests unpublish dataset not found.
+   */
   public function testUnpublishDatasetNotFound(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('archive')
@@ -414,6 +365,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('missing-uuid', $result['identifier']);
   }
 
+  /**
+   * Tests drop datastore success.
+   */
   public function testDropDatastoreSuccess(): void {
     $datastore = $this->createMock(DatastoreService::class);
     $datastore->expects($this->once())
@@ -427,6 +381,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('abc123__456', $result['resource_id']);
   }
 
+  /**
+   * Tests drop datastore error.
+   */
   public function testDropDatastoreError(): void {
     $datastore = $this->createMock(DatastoreService::class);
     $datastore->method('drop')
@@ -439,6 +396,9 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('Table not found', $result['error']);
   }
 
+  /**
+   * Tests post metastore item success.
+   */
   public function testPostMetastoreItemSuccess(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->once())
@@ -459,6 +419,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('dict-uuid-1', $result['identifier']);
   }
 
+  /**
+   * Tests post metastore item already exists.
+   */
   public function testPostMetastoreItemAlreadyExists(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('post')
@@ -471,6 +434,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('data-dictionary', $result['schema_id']);
   }
 
+  /**
+   * Tests post metastore item invalid json.
+   */
   public function testPostMetastoreItemInvalidJson(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->never())->method('post');
@@ -482,6 +448,9 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('Invalid JSON', $result['error']);
   }
 
+  /**
+   * Tests post metastore item non object json.
+   */
   public function testPostMetastoreItemNonObjectJson(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->never())->method('post');
@@ -493,6 +462,9 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('JSON object', $result['error']);
   }
 
+  /**
+   * Tests post metastore item error.
+   */
   public function testPostMetastoreItemError(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('post')
@@ -505,6 +477,9 @@ class WriteToolsTest extends TestCase {
     $this->assertStringContainsString('Schema validation failed', $result['error']);
   }
 
+  /**
+   * Tests patch metastore item success.
+   */
   public function testPatchMetastoreItemSuccess(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->once())
@@ -520,6 +495,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('dict-uuid-1', $result['identifier']);
   }
 
+  /**
+   * Tests patch metastore item not found.
+   */
   public function testPatchMetastoreItemNotFound(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('patch')
@@ -533,6 +511,9 @@ class WriteToolsTest extends TestCase {
     $this->assertEquals('missing', $result['identifier']);
   }
 
+  /**
+   * Tests patch metastore item non object json.
+   */
   public function testPatchMetastoreItemNonObjectJson(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->expects($this->never())->method('patch');

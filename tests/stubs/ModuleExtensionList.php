@@ -7,6 +7,9 @@ namespace Drupal\Core\Extension;
  */
 class ModuleExtensionList {
 
+  /**
+   * Get all installed info.
+   */
   public function getAllInstalledInfo(): array {
     return [];
   }

@@ -10,32 +10,15 @@ services:
       - '@dkan_query_tools.datastore'
       - '@dkan_query_tools.search'
       - '@dkan_mcp.tools.harvest'
-      - '@dkan_mcp.tools.service'
-      - '@dkan_mcp.tools.event'
-      - '@dkan_mcp.tools.permission'
       - '@dkan_mcp.tools.resource'
       - '@dkan_mcp.tools.write'
-      - '@dkan_mcp.tools.drupal'
       - '@dkan_mcp.tools.status'
-      - '@dkan_mcp.tools.log'
 
   dkan_mcp.tools.harvest:
     class: Drupal\dkan_mcp\Tools\HarvestTools
     arguments:
       - '@dkan.harvest.service'
       - '@dkan_mcp.logger_channel'
-
-  dkan_mcp.tools.service:
-    class: Drupal\dkan_mcp\Tools\ServiceTools
-    arguments:
-      - '@service_container'
-      - '@module_handler'
-
-  dkan_mcp.tools.event:
-    class: Drupal\dkan_mcp\Tools\EventTools
-    arguments:
-      - '@service_container'
-      - '@event_dispatcher'
 
   dkan_mcp.tools.resource:
     class: Drupal\dkan_mcp\Tools\ResourceTools
@@ -44,26 +27,6 @@ services:
       - '@dkan.metastore.resource_mapper'
       - '@dkan.datastore.service'
       - '@dkan.common.dataset_info'
-
-  dkan_mcp.tools.permission:
-    class: Drupal\dkan_mcp\Tools\PermissionTools
-    arguments:
-      - '@user.permissions'
-      - '@router.route_provider'
-      - '@entity_type.manager'
-      - '@module_handler'
-
-  dkan_mcp.tools.drupal:
-    class: Drupal\dkan_mcp\Tools\DrupalTools
-    arguments:
-      - '@entity_type.manager'
-      - '@entity_field.manager'
-      - '@entity_type.bundle.info'
-      - '@module_handler'
-      - '@extension.list.module'
-      - '@config.factory'
-      - '@router.route_provider'
-      - '@service_container'
 
   dkan_mcp.tools.status:
     class: Drupal\dkan_mcp\Tools\StatusTools
@@ -76,16 +39,9 @@ services:
       - '@queue'
       - '@plugin.manager.queue_worker'
 
-  dkan_mcp.tools.log:
-    class: Drupal\dkan_mcp\Tools\LogTools
-    arguments:
-      - '@database'
-
   dkan_mcp.tools.write:
     class: Drupal\dkan_mcp\Tools\WriteTools
     arguments:
-      - '@module_installer'
-      - '@module_handler'
       - '@dkan.metastore.service'
       - '@dkan.datastore.service'
       - '@dkan_mcp.logger_channel'

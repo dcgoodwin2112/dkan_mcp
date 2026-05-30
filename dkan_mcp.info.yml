@@ -4,7 +4,7 @@ type: module
 core_version_requirement: ^10.2 || ^11
 package: DKAN
 dependencies:
-  - dkan:metastore
-  - dkan:datastore
-  - dkan:harvest
+  - dkan:dkan_metastore
+  - dkan:dkan_datastore
+  - dkan:dkan_harvest
   - dkan_query_tools:dkan_query_tools

@@ -7,6 +7,9 @@ namespace Drupal\Core\Database;
  */
 class Schema {
 
+  /**
+   * Table exists.
+   */
   public function tableExists(string $table): bool {
     return TRUE;
   }

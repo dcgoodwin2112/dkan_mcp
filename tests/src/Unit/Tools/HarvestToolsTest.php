@@ -3,16 +3,25 @@
 namespace Drupal\Tests\dkan_mcp\Unit\Tools;
 
 use Drupal\dkan_mcp\Tools\HarvestTools;
-use Drupal\harvest\HarvestService;
+use Drupal\dkan_harvest\HarvestService;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
+/**
+ * Tests HarvestTools.
+ */
 class HarvestToolsTest extends TestCase {
 
+  /**
+   * Create tools.
+   */
   protected function createTools(HarvestService $harvest): HarvestTools {
     return new HarvestTools($harvest, new NullLogger());
   }
 
+  /**
+   * Tests list harvest plans.
+   */
   public function testListHarvestPlans(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getAllHarvestIds')->willReturn(['plan_a', 'plan_b']);
@@ -24,6 +33,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertEquals(2, $result['total']);
   }
 
+  /**
+   * Tests list harvest plans empty.
+   */
   public function testListHarvestPlansEmpty(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getAllHarvestIds')->willReturn([]);
@@ -35,6 +47,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertEquals(0, $result['total']);
   }
 
+  /**
+   * Tests get harvest plan.
+   */
   public function testGetHarvestPlan(): void {
     $plan = (object) [
       'identifier' => 'plan_a',
@@ -51,6 +66,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertEquals('http://example.com/data.json', $result['plan']['extract']['uri']);
   }
 
+  /**
+   * Tests get harvest plan not found.
+   */
   public function testGetHarvestPlanNotFound(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getHarvestPlanObject')->willReturn(NULL);
@@ -61,6 +79,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertArrayHasKey('error', $result);
   }
 
+  /**
+   * Tests get harvest runs.
+   */
   public function testGetHarvestRuns(): void {
     $runJson = json_encode([
       'status' => ['extract' => 'SUCCESS'],
@@ -84,6 +105,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertArrayHasKey(0, $result['runs']);
   }
 
+  /**
+   * Tests get harvest run result.
+   */
   public function testGetHarvestRunResult(): void {
     $runResult = [
       'status' => ['extract' => 'SUCCESS', 'load' => ['dataset-1' => 'NEW']],
@@ -101,6 +125,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertArrayNotHasKey('plan', $result['result']);
   }
 
+  /**
+   * Tests get harvest run result not found.
+   */
   public function testGetHarvestRunResultNotFound(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getHarvestRunResult')->willReturn([]);
@@ -111,6 +138,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertArrayHasKey('error', $result);
   }
 
+  /**
+   * Tests get harvest run result not found with run id.
+   */
   public function testGetHarvestRunResultNotFoundWithRunId(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getHarvestRunResult')->willReturn([]);
@@ -123,6 +153,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertStringContainsString('nonexistent_run', $result['error']);
   }
 
+  /**
+   * Tests get harvest runs errors on invalid plan.
+   */
   public function testGetHarvestRunsErrorsOnInvalidPlan(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getHarvestPlanObject')->willReturn(NULL);
@@ -134,6 +167,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertStringContainsString('Harvest plan not found', $result['error']);
   }
 
+  /**
+   * Tests register harvest success.
+   */
   public function testRegisterHarvestSuccess(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->expects($this->once())
@@ -155,6 +191,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertEquals('test_plan', $result['plan_id']);
   }
 
+  /**
+   * Tests register harvest invalid json.
+   */
   public function testRegisterHarvestInvalidJson(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->expects($this->never())->method('registerHarvest');
@@ -166,6 +205,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertStringContainsString('Invalid JSON', $result['error']);
   }
 
+  /**
+   * Tests register harvest non object.
+   */
   public function testRegisterHarvestNonObject(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->expects($this->never())->method('registerHarvest');
@@ -177,6 +219,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertStringContainsString('JSON object', $result['error']);
   }
 
+  /**
+   * Tests register harvest error.
+   */
   public function testRegisterHarvestError(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('registerHarvest')
@@ -189,6 +234,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertStringContainsString('Validation failed', $result['error']);
   }
 
+  /**
+   * Tests run harvest success.
+   */
   public function testRunHarvestSuccess(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getHarvestPlanObject')
@@ -207,6 +255,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertArrayHasKey('result', $result);
   }
 
+  /**
+   * Tests run harvest not found.
+   */
   public function testRunHarvestNotFound(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getHarvestPlanObject')->willReturn(NULL);
@@ -215,10 +266,13 @@ class HarvestToolsTest extends TestCase {
     $tools = $this->createTools($harvest);
     $result = $tools->runHarvest('nonexistent');
 
-    $this->assertArrayHasKey('error', $result);
-    $this->assertStringContainsString('Harvest plan not found', $result['error']);
+    $this->assertEquals('not_found', $result['status']);
+    $this->assertStringContainsString('Harvest plan not found', $result['message']);
   }
 
+  /**
+   * Tests run harvest error.
+   */
   public function testRunHarvestError(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getHarvestPlanObject')
@@ -233,6 +287,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertStringContainsString('Extract failed', $result['error']);
   }
 
+  /**
+   * Tests deregister harvest success.
+   */
   public function testDeregisterHarvestSuccess(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getHarvestPlanObject')
@@ -249,6 +306,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertEquals('test_plan', $result['plan_id']);
   }
 
+  /**
+   * Tests deregister harvest not found.
+   */
   public function testDeregisterHarvestNotFound(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getHarvestPlanObject')->willReturn(NULL);
@@ -261,6 +321,9 @@ class HarvestToolsTest extends TestCase {
     $this->assertStringContainsString('not found', $result['message']);
   }
 
+  /**
+   * Tests deregister harvest error.
+   */
   public function testDeregisterHarvestError(): void {
     $harvest = $this->createMock(HarvestService::class);
     $harvest->method('getHarvestPlanObject')

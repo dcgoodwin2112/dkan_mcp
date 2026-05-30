@@ -2,7 +2,7 @@
 
 namespace Drupal\dkan_mcp\Tools;
 
-use Drupal\harvest\HarvestService;
+use Drupal\dkan_harvest\HarvestService;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -25,6 +25,9 @@ class HarvestTools {
 
   /**
    * Get harvest plan configuration.
+   *
+   * @param string $planId
+   *   Harvest plan ID.
    */
   public function getHarvestPlan(string $planId): array {
     $plan = $this->harvest->getHarvestPlanObject($planId);
@@ -36,6 +39,9 @@ class HarvestTools {
 
   /**
    * List all runs for a harvest plan.
+   *
+   * @param string $planId
+   *   Harvest plan ID.
    */
   public function getHarvestRuns(string $planId): array {
     $plan = $this->harvest->getHarvestPlanObject($planId);
@@ -54,6 +60,11 @@ class HarvestTools {
 
   /**
    * Get detailed result for a harvest run.
+   *
+   * @param string $planId
+   *   Harvest plan ID.
+   * @param string|null $runId
+   *   Run ID/timestamp. Omit for the latest run.
    */
   public function getHarvestRunResult(string $planId, ?string $runId = NULL): array {
     $result = $this->harvest->getHarvestRunResult($planId, $runId);
@@ -70,6 +81,10 @@ class HarvestTools {
 
   /**
    * Register a new harvest plan.
+   *
+   * @param string $plan
+   *   Harvest plan as a JSON string with identifier, extract, and load
+   *   properties.
    */
   public function registerHarvest(string $plan): array {
     $decoded = json_decode($plan);
@@ -98,10 +113,17 @@ class HarvestTools {
 
   /**
    * Execute a harvest run.
+   *
+   * @param string $planId
+   *   Harvest plan ID.
    */
   public function runHarvest(string $planId): array {
     if ($this->harvest->getHarvestPlanObject($planId) === NULL) {
-      return ['error' => 'Harvest plan not found: ' . $planId];
+      return [
+        'status' => 'not_found',
+        'plan_id' => $planId,
+        'message' => 'Harvest plan not found: ' . $planId,
+      ];
     }
 
     try {
@@ -122,6 +144,9 @@ class HarvestTools {
 
   /**
    * Remove a harvest plan.
+   *
+   * @param string $planId
+   *   Harvest plan ID.
    */
   public function deregisterHarvest(string $planId): array {
     if ($this->harvest->getHarvestPlanObject($planId) === NULL) {
@@ -142,7 +167,10 @@ class HarvestTools {
       ];
     }
     catch (\Throwable $e) {
-      $this->logger->error('MCP: Failed to deregister harvest @id: @error', ['@id' => $planId, '@error' => $e->getMessage()]);
+      $this->logger->error('MCP: Failed to deregister harvest @id: @error', [
+        '@id' => $planId,
+        '@error' => $e->getMessage(),
+      ]);
       return ['error' => $e->getMessage()];
     }
   }

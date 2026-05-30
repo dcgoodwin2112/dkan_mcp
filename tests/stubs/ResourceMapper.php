@@ -1,14 +1,17 @@
 <?php
 
-namespace Drupal\metastore;
+namespace Drupal\dkan_metastore;
 
-use Drupal\common\DataResource;
+use Drupal\dkan_common\DataResource;
 
 /**
- * Stub for Drupal\metastore\ResourceMapper.
+ * Stub for Drupal\dkan_metastore\ResourceMapper.
  */
 class ResourceMapper {
 
+  /**
+   * Get.
+   */
   public function get(
     string $identifier,
     string $perspective = DataResource::DEFAULT_SOURCE_PERSPECTIVE,

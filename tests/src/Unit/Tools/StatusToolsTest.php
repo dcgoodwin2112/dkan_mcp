@@ -2,7 +2,7 @@
 
 namespace Drupal\Tests\dkan_mcp\Unit\Tools;
 
-use Drupal\common\DatasetInfo;
+use Drupal\dkan_common\DatasetInfo;
 use Drupal\Component\Plugin\Exception\PluginNotFoundException;
 use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\Extension\ModuleHandlerInterface;
@@ -10,13 +10,19 @@ use Drupal\Core\Queue\QueueFactory;
 use Drupal\Core\Queue\QueueWorkerManagerInterface;
 use Drupal\Core\Queue\MemoryQueue;
 use Drupal\dkan_mcp\Tools\StatusTools;
-use Drupal\harvest\HarvestService;
-use Drupal\metastore\MetastoreService;
+use Drupal\dkan_harvest\HarvestService;
+use Drupal\dkan_metastore\MetastoreService;
 use PHPUnit\Framework\TestCase;
 use RootedData\RootedJsonData;
 
+/**
+ * Tests StatusTools.
+ */
 class StatusToolsTest extends TestCase {
 
+  /**
+   * Create tools.
+   */
   protected function createTools(
     ?MetastoreService $metastore = NULL,
     ?DatasetInfo $datasetInfo = NULL,
@@ -49,6 +55,9 @@ class StatusToolsTest extends TestCase {
     return new StatusTools($metastore, $datasetInfo, $harvest, $moduleHandler, $moduleList, $queueFactory, $queueWorkerManager);
   }
 
+  /**
+   * Tests get site status basic.
+   */
   public function testGetSiteStatusBasic(): void {
     $dataset1 = new RootedJsonData(json_encode([
       'identifier' => 'uuid-1',
@@ -72,9 +81,11 @@ class StatusToolsTest extends TestCase {
 
     $datasetInfo = $this->createMock(DatasetInfo::class);
     $datasetInfo->method('gather')->willReturn([
-      'latest_revision' => ['distributions' => [
+      'latest_revision' => [
+        'distributions' => [
         ['importer_status' => 'done'],
-      ]],
+        ],
+      ],
     ]);
 
     $harvest = $this->createMock(HarvestService::class);
@@ -91,6 +102,9 @@ class StatusToolsTest extends TestCase {
     $this->assertArrayNotHasKey('sampled', $result);
   }
 
+  /**
+   * Tests get site status distribution formats.
+   */
   public function testGetSiteStatusDistributionFormats(): void {
     $dataset = new RootedJsonData(json_encode([
       'identifier' => 'uuid-1',
@@ -115,6 +129,9 @@ class StatusToolsTest extends TestCase {
     $this->assertEquals(4, $result['distributions']['total']);
   }
 
+  /**
+   * Tests get site status import counts.
+   */
   public function testGetSiteStatusImportCounts(): void {
     $dataset = new RootedJsonData(json_encode([
       'identifier' => 'uuid-1',
@@ -127,11 +144,13 @@ class StatusToolsTest extends TestCase {
 
     $datasetInfo = $this->createMock(DatasetInfo::class);
     $datasetInfo->method('gather')->willReturn([
-      'latest_revision' => ['distributions' => [
+      'latest_revision' => [
+        'distributions' => [
         ['importer_status' => 'done'],
         ['importer_status' => 'error'],
         ['importer_status' => 'waiting'],
-      ]],
+        ],
+      ],
     ]);
 
     $tools = $this->createTools(metastore: $metastore, datasetInfo: $datasetInfo);
@@ -142,6 +161,9 @@ class StatusToolsTest extends TestCase {
     $this->assertEquals(1, $result['imports']['pending']);
   }
 
+  /**
+   * Tests get site status no harvest.
+   */
   public function testGetSiteStatusNoHarvest(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('count')->willReturn(0);
@@ -157,6 +179,9 @@ class StatusToolsTest extends TestCase {
     $this->assertEquals(0, $result['datasets']['total']);
   }
 
+  /**
+   * Tests get site status service error.
+   */
   public function testGetSiteStatusServiceError(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('count')->willThrowException(new \Exception('Database connection failed'));
@@ -168,6 +193,9 @@ class StatusToolsTest extends TestCase {
     $this->assertStringContainsString('Database connection failed', $result['error']);
   }
 
+  /**
+   * Tests get site status module checks.
+   */
   public function testGetSiteStatusModuleChecks(): void {
     $metastore = $this->createMock(MetastoreService::class);
     $metastore->method('count')->willReturn(0);
@@ -188,6 +216,9 @@ class StatusToolsTest extends TestCase {
     $this->assertEquals('not_enabled', $result['dkan']['modules']['metastore_search']);
   }
 
+  /**
+   * Tests get queue status all queues.
+   */
   public function testGetQueueStatusAllQueues(): void {
     $queueFactory = new QueueFactory();
     $queueFactory->setQueue('datastore_import', new MemoryQueue(5));
@@ -224,6 +255,9 @@ class StatusToolsTest extends TestCase {
     $this->assertEquals(30, $result['queues'][1]['lease_time']);
   }
 
+  /**
+   * Tests get queue status specific queue.
+   */
   public function testGetQueueStatusSpecificQueue(): void {
     $queueFactory = new QueueFactory();
     $queueFactory->setQueue('datastore_import', new MemoryQueue(7));
@@ -246,6 +280,9 @@ class StatusToolsTest extends TestCase {
     $this->assertEquals('Datastore Import', $result['queues'][0]['title']);
   }
 
+  /**
+   * Tests get queue status unknown queue.
+   */
   public function testGetQueueStatusUnknownQueue(): void {
     $queueWorkerManager = $this->createMock(QueueWorkerManagerInterface::class);
     $queueWorkerManager->method('getDefinition')
@@ -259,6 +296,9 @@ class StatusToolsTest extends TestCase {
     $this->assertStringContainsString('nonexistent', $result['error']);
   }
 
+  /**
+   * Tests get queue status empty queues.
+   */
   public function testGetQueueStatusEmptyQueues(): void {
     $queueWorkerManager = $this->createMock(QueueWorkerManagerInterface::class);
     $queueWorkerManager->method('getDefinitions')->willReturn([
