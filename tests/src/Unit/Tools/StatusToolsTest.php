@@ -203,17 +203,17 @@ class StatusToolsTest extends TestCase {
 
     $moduleHandler = $this->createMock(ModuleHandlerInterface::class);
     $moduleHandler->method('moduleExists')->willReturnCallback(
-      fn($module) => in_array($module, ['metastore', 'datastore', 'common']),
+      fn($module) => in_array($module, ['dkan_metastore', 'dkan_datastore', 'dkan_common']),
     );
 
     $tools = $this->createTools(metastore: $metastore, moduleHandler: $moduleHandler);
     $result = $tools->getSiteStatus();
 
-    $this->assertEquals('enabled', $result['dkan']['modules']['metastore']);
-    $this->assertEquals('enabled', $result['dkan']['modules']['datastore']);
-    $this->assertEquals('not_enabled', $result['dkan']['modules']['harvest']);
-    $this->assertEquals('enabled', $result['dkan']['modules']['common']);
-    $this->assertEquals('not_enabled', $result['dkan']['modules']['metastore_search']);
+    $this->assertEquals('enabled', $result['dkan']['modules']['dkan_metastore']);
+    $this->assertEquals('enabled', $result['dkan']['modules']['dkan_datastore']);
+    $this->assertEquals('not_enabled', $result['dkan']['modules']['dkan_harvest']);
+    $this->assertEquals('enabled', $result['dkan']['modules']['dkan_common']);
+    $this->assertEquals('not_enabled', $result['dkan']['modules']['dkan_metastore_search']);
   }
 
   /**
@@ -229,12 +229,12 @@ class StatusToolsTest extends TestCase {
     $queueWorkerManager->method('getDefinitions')->willReturn([
       'datastore_import' => [
         'title' => 'Datastore Import',
-        'provider' => 'datastore',
+        'provider' => 'dkan_datastore',
         'cron' => ['time' => 180],
       ],
       'localize_import' => [
         'title' => 'Localize Import',
-        'provider' => 'common',
+        'provider' => 'dkan_common',
         'cron' => ['time' => 60, 'lease_time' => 30],
       ],
       'system_queue' => [
@@ -267,7 +267,7 @@ class StatusToolsTest extends TestCase {
       ->with('datastore_import')
       ->willReturn([
         'title' => 'Datastore Import',
-        'provider' => 'datastore',
+        'provider' => 'dkan_datastore',
         'cron' => ['time' => 180],
       ]);
 
@@ -304,11 +304,11 @@ class StatusToolsTest extends TestCase {
     $queueWorkerManager->method('getDefinitions')->willReturn([
       'datastore_import' => [
         'title' => 'Datastore Import',
-        'provider' => 'datastore',
+        'provider' => 'dkan_datastore',
       ],
       'post_import' => [
         'title' => 'Post Import',
-        'provider' => 'datastore',
+        'provider' => 'dkan_datastore',
       ],
     ]);
 
