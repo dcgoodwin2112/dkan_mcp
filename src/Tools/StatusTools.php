@@ -21,21 +21,21 @@ class StatusTools {
    * Key DKAN modules to check.
    */
   protected const DKAN_MODULES = [
-    'metastore',
-    'datastore',
-    'harvest',
-    'common',
-    'metastore_search',
+    'dkan_metastore',
+    'dkan_datastore',
+    'dkan_harvest',
+    'dkan_common',
+    'dkan_metastore_search',
   ];
 
   /**
    * DKAN modules that provide queue workers.
    */
   protected const DKAN_QUEUE_MODULES = [
-    'datastore',
-    'metastore',
-    'common',
-    'harvest',
+    'dkan_datastore',
+    'dkan_metastore',
+    'dkan_common',
+    'dkan_harvest',
   ];
 
   /**
