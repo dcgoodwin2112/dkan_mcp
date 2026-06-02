@@ -2,10 +2,19 @@
 
 namespace Drupal\dkan_harvest;
 
+use Drupal\dkan_harvest\Entity\HarvestRunRepository;
+
 /**
  * Stub for Drupal\dkan_harvest\HarvestService.
  */
 class HarvestService {
+
+  /**
+   * Run repository (public property on the real service).
+   *
+   * @var \Drupal\dkan_harvest\Entity\HarvestRunRepository
+   */
+  public HarvestRunRepository $runRepository;
 
   /**
    * Get all harvest ids.
@@ -19,13 +28,6 @@ class HarvestService {
    */
   public function getHarvestPlanObject(string $plan_id): ?object {
     return NULL;
-  }
-
-  /**
-   * Get all harvest run info.
-   */
-  public function getAllHarvestRunInfo(string $plan_id): array {
-    return [];
   }
 
   /**

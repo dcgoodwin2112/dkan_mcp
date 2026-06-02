@@ -4,6 +4,7 @@ namespace Drupal\Tests\dkan_mcp\Unit\Tools;
 
 use Drupal\dkan_mcp\Tools\HarvestTools;
 use Drupal\dkan_harvest\HarvestService;
+use Drupal\dkan_harvest\Entity\HarvestRunRepository;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
@@ -80,6 +81,18 @@ class HarvestToolsTest extends TestCase {
   }
 
   /**
+   * Create a HarvestService mock with a run repository attached.
+   *
+   * The real service exposes the repository as a public property; tests assign
+   * a mock so getHarvestRuns() can read run results through it.
+   */
+  protected function harvestWithRepository(HarvestRunRepository $repo): HarvestService {
+    $harvest = $this->createMock(HarvestService::class);
+    $harvest->runRepository = $repo;
+    return $harvest;
+  }
+
+  /**
    * Tests get harvest runs.
    */
   public function testGetHarvestRuns(): void {
@@ -88,10 +101,11 @@ class HarvestToolsTest extends TestCase {
       'identifier' => '1700000000',
       'plan' => json_encode(['identifier' => 'plan_a', 'extract' => ['type' => 'index']]),
     ]);
-    $harvest = $this->createMock(HarvestService::class);
+    $repo = $this->createMock(HarvestRunRepository::class);
+    // retrieveAllRunsJson returns JSON-encoded results keyed by run ID.
+    $repo->method('retrieveAllRunsJson')->willReturn([1 => $runJson]);
+    $harvest = $this->harvestWithRepository($repo);
     $harvest->method('getHarvestPlanObject')->willReturn((object) ['identifier' => 'plan_a']);
-    // Use object keys to simulate real DKAN response.
-    $harvest->method('getAllHarvestRunInfo')->willReturn([42 => $runJson]);
 
     $tools = $this->createTools($harvest);
     $result = $tools->getHarvestRuns('plan_a');
@@ -99,10 +113,52 @@ class HarvestToolsTest extends TestCase {
     $this->assertCount(1, $result['runs']);
     $this->assertEquals(1, $result['total']);
     $this->assertEquals('1700000000', $result['runs'][0]['identifier']);
+    // Run ID from the repository key is surfaced.
+    $this->assertEquals('1', $result['runs'][0]['run_id']);
     // Plan config should be stripped to reduce token waste.
     $this->assertArrayNotHasKey('plan', $result['runs'][0]);
     // Runs should be numerically indexed (array_values).
     $this->assertArrayHasKey(0, $result['runs']);
+  }
+
+  /**
+   * Tests get harvest runs with multiple runs.
+   */
+  public function testGetHarvestRunsMultiple(): void {
+    $run = fn(string $id) => json_encode([
+      'status' => ['extract' => 'SUCCESS'],
+      'identifier' => $id,
+    ]);
+    $repo = $this->createMock(HarvestRunRepository::class);
+    $repo->method('retrieveAllRunsJson')->willReturn([
+      3 => $run('1700000300'),
+      2 => $run('1700000200'),
+    ]);
+    $harvest = $this->harvestWithRepository($repo);
+    $harvest->method('getHarvestPlanObject')->willReturn((object) ['identifier' => 'plan_a']);
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->getHarvestRuns('plan_a');
+
+    $this->assertEquals(2, $result['total']);
+    $this->assertEquals('3', $result['runs'][0]['run_id']);
+    $this->assertEquals('2', $result['runs'][1]['run_id']);
+  }
+
+  /**
+   * Tests get harvest runs with no runs.
+   */
+  public function testGetHarvestRunsEmpty(): void {
+    $repo = $this->createMock(HarvestRunRepository::class);
+    $repo->method('retrieveAllRunsJson')->willReturn([]);
+    $harvest = $this->harvestWithRepository($repo);
+    $harvest->method('getHarvestPlanObject')->willReturn((object) ['identifier' => 'plan_a']);
+
+    $tools = $this->createTools($harvest);
+    $result = $tools->getHarvestRuns('plan_a');
+
+    $this->assertSame([], $result['runs']);
+    $this->assertEquals(0, $result['total']);
   }
 
   /**
