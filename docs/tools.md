@@ -1,5 +1,10 @@
 # Tool Reference
 
+> **Historical snapshot — legacy `dkan_mcp` module.** Documents the 35 tools of
+> the original bespoke server. The current server is `dkan_mcp_server` (38 tools:
+> 25 read, 13 write); see its `README.md`. Do not use these counts as a
+> validation target for the current module.
+
 Per-tool parameter schemas, response shapes, and behavioral notes for all 35 dkan_mcp tools. For workflow sequences and common mistakes, see [AGENTS.md](../AGENTS.md). For overview tables and installation, see [README.md](../README.md).
 
 **Error convention:** All tools return `{"error": "message"}` on failure. Only success responses are documented below.
