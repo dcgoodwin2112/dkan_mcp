@@ -48,11 +48,19 @@ class HarvestTools {
     if ($plan === NULL) {
       return ['error' => 'Harvest plan not found: ' . $planId];
     }
-    $runs = $this->harvest->getAllHarvestRunInfo($planId);
+    // HarvestService has no method for listing all run results, so read them
+    // from its public run repository. Each value is a JSON-encoded run result
+    // keyed by run ID (newest first).
+    $runs = $this->harvest->runRepository->retrieveAllRunsJson($planId);
     $decoded = [];
-    foreach ($runs as $run) {
+    foreach ($runs as $runId => $run) {
       $item = is_string($run) ? json_decode($run, TRUE) : $run;
+      if (!is_array($item)) {
+        continue;
+      }
+      // Strip the embedded plan config to reduce token waste.
       unset($item['plan']);
+      $item['run_id'] = (string) $runId;
       $decoded[] = $item;
     }
     return ['runs' => $decoded, 'total' => count($decoded)];
